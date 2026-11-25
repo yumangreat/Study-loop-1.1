@@ -23,7 +23,7 @@
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 
-  <!-- KaTeX (LaTeX数式レンダリングエンジン) CDN -->
+  <!-- KaTeX (LaTeX数式レンダリングエンジン 0.16.11) CDN -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
@@ -128,6 +128,15 @@
       padding: 0.15rem 0;
     }
 
+    /* 8秒カウントダウンバーアニメーション */
+    @keyframes shrinkProgress {
+      from { width: 100%; }
+      to { width: 0%; }
+    }
+    .undo-timer-bar {
+      animation: shrinkProgress 8s linear forwards;
+    }
+
     /* スクロールバー美化 */
     ::-webkit-scrollbar {
       width: 6px;
@@ -153,7 +162,7 @@
 
   <!-- ==================== ヘッダー ==================== -->
   <header class="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-    <div class="max-w-5xl mx-auto px-3 sm:px-6 h-15 py-2.5 flex items-center justify-between gap-2">
+    <div class="max-w-5xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
       <!-- ロゴ -->
       <div class="flex items-center gap-2.5 shrink-0">
         <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 via-violet-600 to-rose-500 flex items-center justify-center text-white shadow-sm">
@@ -236,8 +245,8 @@
               <i class="fa-solid fa-fire text-xs"></i>
             </div>
             <div class="min-w-0">
-              <div class="font-bold text-xs sm:text-sm">苦手・未習得特訓</div>
-              <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">誤答・正答率80%未満を抽出</p>
+              <div class="font-bold text-xs sm:text-sm">苦手・未学習特訓</div>
+              <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">誤答・未習得問題だけを抽出</p>
             </div>
           </button>
 
@@ -247,7 +256,7 @@
               <i class="fa-solid fa-arrow-down-1-9 text-xs"></i>
             </div>
             <div class="min-w-0">
-              <div class="font-bold text-xs sm:text-sm">全問順番モード</div>
+              <div class="font-bold text-xs sm:text-sm">順番通り（全問）</div>
               <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">登録順・カテゴリ別に演習</p>
             </div>
           </button>
@@ -258,7 +267,7 @@
               <i class="fa-solid fa-shuffle text-xs"></i>
             </div>
             <div class="min-w-0">
-              <div class="font-bold text-xs sm:text-sm">ランダムシャッフル</div>
+              <div class="font-bold text-xs sm:text-sm">シャッフル</div>
               <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">全問をランダム順で出題</p>
             </div>
           </button>
@@ -301,15 +310,26 @@
         </div>
       </div>
 
-      <!-- プログレスバー -->
-      <div class="bg-white dark:bg-slate-900 rounded-2xl px-4 py-2.5 shadow-sm border border-slate-200/80 dark:border-slate-800">
-        <div class="flex items-center justify-between text-xs font-semibold mb-1.5">
-          <span id="progressLeftLabel" class="text-slate-600 dark:text-slate-300">進捗状況</span>
-          <span id="progressRightLabel" class="text-indigo-600 dark:text-indigo-400 font-bold">0 / 0 問</span>
+      <!-- プログレスバー＆「↩ 1つ戻る (Z)」操作バー -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl px-4 py-2.5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between text-xs font-semibold mb-1.5">
+            <span id="progressLeftLabel" class="text-slate-600 dark:text-slate-300 truncate">進捗状況</span>
+            <span id="progressRightLabel" class="text-indigo-600 dark:text-indigo-400 font-bold shrink-0 ml-2">0 / 0 問</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div id="studyProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
         </div>
-        <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-          <div id="studyProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 rounded-full transition-all duration-300" style="width: 0%"></div>
-        </div>
+
+        <!-- 間違えても戻れるボタン（1つ戻る） -->
+        <button id="btnUndoAnswer" disabled title="直前の正誤判定を取り消して1つ前の問題に戻ります (ショートカット: Z / Backspace)"
+          class="shrink-0 px-3 py-2 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/70 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-50 dark:disabled:hover:bg-amber-950/50 shadow-sm active:scale-95">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>1つ戻る</span>
+          <span class="hidden sm:inline text-[10px] opacity-75 font-mono">(Z)</span>
+          <span id="undoStackBadge" class="px-1.5 py-0.2 rounded-md bg-amber-200/80 dark:bg-amber-800 text-[10px] font-mono">0</span>
+        </button>
       </div>
 
       <!-- 学習完了画面 -->
@@ -322,6 +342,9 @@
           繰り越し問題を含め、すべての問題をクリアしました。
         </p>
         <div class="flex flex-wrap justify-center gap-3 pt-2">
+          <button id="btnCompleteUndoLast" class="hidden px-4 py-3 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/70 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-bold text-sm shadow-sm transition">
+            <i class="fa-solid fa-rotate-left mr-1.5"></i>最後の判定を取り消して戻る (Z)
+          </button>
           <button id="btnCompleteRestart" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm transition">
             <i class="fa-solid fa-rotate-right mr-1.5"></i>同じモードでもう一度学習
           </button>
@@ -689,7 +712,7 @@
             <input type="radio" name="bulkTarget" value="new" class="accent-indigo-600" />
             <span>新しいデッキを作成して追加</span>
           </label>
-          <input type="text" id="bulkNewDeckName" placeholder="新規デッキ名（例：数学II 微分積分）"
+          <input type="text" id="bulkNewDeckName" placeholder="新規デッキ名（例：世界史・イスラーム世界）"
             class="hidden flex-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-xs" />
         </div>
       </div>
@@ -724,8 +747,8 @@
     </div>
   </div>
 
-  <!-- トースト通知 -->
-  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <!-- トースト通知コンテナ -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col items-end gap-2 pointer-events-none"></div>
 
   <!-- ==================== アプリケーションロジック ==================== -->
   <script>
@@ -753,7 +776,10 @@
       }
     ];
 
-    const STORAGE_KEY = 'studyloop_pro_math_v2';
+    const STORAGE_KEY = 'studyloop_pro_math_v1';
+    const UNDO_STORAGE_KEY = 'studyloop_pro_math_v1_undo';
+    const TRASH_BACKUP_KEY = 'studyloop_pro_math_v1_trash_backup';
+    const MAX_UNDO_STEPS = 30;
 
     function generateId(prefix = 'id') {
       return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -769,10 +795,14 @@
         .replace(/'/g, '&#039;');
     }
 
+    function deepClone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
     /**
      * 赤シート（【...】）＋ KaTeX数式 統合レンダリング関数
-     * 1. 先にHTMLエスケープ後、【...】を <span class="red-mask">...</span> に変換
-     * 2. DOM要素に反映後、KaTeXの renderMathInElement を実行して赤シート枠内の数式も美しく描画
+     * HTMLエスケープを先に行うことで数式内の < や > がタグ誤認されるのを防ぎ、
+     * DOMパース後に KaTeX の renderMathInElement で赤シート枠内も含めて美しく描画する
      */
     function renderRichMathContent(containerEl, rawText) {
       if (!containerEl) return;
@@ -803,7 +833,6 @@
           console.warn('KaTeX render warning:', err);
         }
       } else {
-        // CDNスクリプト遅延ロード時のフォールバック再試行
         setTimeout(() => {
           if (typeof window.renderMathInElement === 'function') {
             applyKaTeXToElement(el);
@@ -812,13 +841,16 @@
       }
     }
 
-    function showToast(message, type = 'info') {
+    /**
+     * トースト通知（通常通知 ＆ 8秒間「元に戻す」アクション付き通知）
+     */
+    function showToast(message, type = 'info', actionOptions = null) {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
       const colors = {
         info: 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900',
         success: 'bg-emerald-600 text-white',
-        warning: 'bg-amber-500 text-white',
+        warning: 'bg-amber-600 text-white',
         error: 'bg-rose-600 text-white'
       };
       const icons = {
@@ -827,8 +859,32 @@
         warning: 'fa-triangle-exclamation',
         error: 'fa-circle-xmark'
       };
-      toast.className = `${colors[type] || colors.info} px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-bold flex items-center gap-2 pointer-events-auto transform transition-all duration-300 translate-y-2 opacity-0`;
-      toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${escapeHtml(message)}</span>`;
+
+      const duration = actionOptions ? 8000 : 2800;
+
+      toast.className = `${colors[type] || colors.info} relative overflow-hidden px-4 py-3 rounded-2xl shadow-xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 pointer-events-auto transform transition-all duration-300 translate-y-2 opacity-0 max-w-md w-full sm:w-auto`;
+
+      const leftDiv = document.createElement('div');
+      leftDiv.className = 'flex items-center gap-2 min-w-0';
+      leftDiv.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} shrink-0"></i><span class="leading-snug">${escapeHtml(message)}</span>`;
+      toast.appendChild(leftDiv);
+
+      if (actionOptions && typeof actionOptions.onAction === 'function') {
+        const actionBtn = document.createElement('button');
+        actionBtn.type = 'button';
+        actionBtn.className = 'shrink-0 px-3 py-1.5 rounded-xl bg-white text-slate-900 hover:bg-amber-100 font-extrabold text-xs shadow-sm transition active:scale-95';
+        actionBtn.innerHTML = `<i class="fa-solid fa-rotate-left mr-1"></i>${escapeHtml(actionOptions.label || '元に戻す')}`;
+        actionBtn.onclick = () => {
+          actionOptions.onAction();
+          toast.remove();
+        };
+        toast.appendChild(actionBtn);
+
+        const timerBar = document.createElement('div');
+        timerBar.className = 'undo-timer-bar absolute bottom-0 left-0 h-1 bg-white/70';
+        toast.appendChild(timerBar);
+      }
+
       container.appendChild(toast);
 
       requestAnimationFrame(() => {
@@ -836,9 +892,10 @@
       });
 
       setTimeout(() => {
+        if (!toast.parentNode) return;
         toast.classList.add('translate-y-2', 'opacity-0');
         setTimeout(() => toast.remove(), 300);
-      }, 2600);
+      }, duration);
     }
 
     function showCustomDialog({ title, message, showInput = false, defaultValue = '', confirmText = 'OK', confirmDanger = false, showCancel = true }) {
@@ -898,7 +955,9 @@
     }
 
     /**
-     * アプリケーション状態管理
+     * =========================================================================
+     * アプリケーション状態管理 & Undoスタック
+     * =========================================================================
      */
     let appData = {
       theme: 'light',
@@ -918,6 +977,165 @@
       selectedCategory: 'ALL',
       lastFocusedTextareaId: 'inputCardBack'
     };
+
+    // 学習中の回答履歴スナップショット（最大30ステップ）
+    let undoStack = [];
+
+    function updateUndoButtonUI() {
+      const btn = document.getElementById('btnUndoAnswer');
+      const badge = document.getElementById('undoStackBadge');
+      const completeUndoBtn = document.getElementById('btnCompleteUndoLast');
+      if (!btn || !badge) return;
+
+      const count = undoStack.length;
+      badge.textContent = count;
+      btn.disabled = count === 0;
+
+      if (completeUndoBtn) {
+        completeUndoBtn.classList.toggle('hidden', count === 0);
+      }
+    }
+
+    function persistUndoStack() {
+      try {
+        // ページ更新後も直近10件は戻れるように保存
+        const recent = undoStack.slice(-10);
+        localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify(recent));
+      } catch (e) {
+        // ストレージ容量超過時は無視
+      }
+    }
+
+    function loadUndoStack() {
+      try {
+        const raw = localStorage.getItem(UNDO_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            undoStack = parsed.slice(-MAX_UNDO_STEPS);
+          }
+        }
+      } catch (e) {
+        undoStack = [];
+      }
+    }
+
+    /**
+     * 回答直前の状態を undoStack にディープスナップショット保存
+     */
+    function pushStudyUndoSnapshot() {
+      const snapshot = {
+        timestamp: Date.now(),
+        currentDeckId: appData.currentDeckId,
+        decks: deepClone(appData.decks),
+        blockSessions: deepClone(appData.blockSessions),
+        studyStateSnapshot: {
+          mode: studyState.mode,
+          simpleQueue: [...studyState.simpleQueue],
+          simpleIndex: studyState.simpleIndex,
+          simpleTotal: studyState.simpleTotal,
+          selectedCategory: studyState.selectedCategory
+        }
+      };
+
+      undoStack.push(snapshot);
+      if (undoStack.length > MAX_UNDO_STEPS) {
+        undoStack.shift();
+      }
+      persistUndoStack();
+      updateUndoButtonUI();
+    }
+
+    /**
+     * 「↩ 1つ戻る (Z)」実行：正誤統計・5問1セットキュー・現在カードを完全復元し即保存
+     */
+    function handleUndoLastAnswer() {
+      if (undoStack.length === 0) {
+        showToast('これ以上戻れる履歴がありません', 'warning');
+        return;
+      }
+
+      const prev = undoStack.pop();
+      appData.decks = prev.decks;
+      appData.blockSessions = prev.blockSessions;
+      if (prev.currentDeckId && appData.decks.some(d => d.id === prev.currentDeckId)) {
+        appData.currentDeckId = prev.currentDeckId;
+      }
+
+      if (prev.studyStateSnapshot) {
+        studyState.mode = prev.studyStateSnapshot.mode;
+        studyState.simpleQueue = [...prev.studyStateSnapshot.simpleQueue];
+        studyState.simpleIndex = prev.studyStateSnapshot.simpleIndex;
+        studyState.simpleTotal = prev.studyStateSnapshot.simpleTotal;
+        studyState.selectedCategory = prev.studyStateSnapshot.selectedCategory;
+      }
+      studyState.isFlipped = false;
+
+      // 復元後の状態を即座に localStorage へ保存（データは消えない）
+      saveAppData();
+      persistUndoStack();
+      renderAllViews();
+      updateUndoButtonUI();
+
+      showToast('1つ前の問題に戻りました（直前の判定・記録も取り消しました）', 'info');
+    }
+
+    /**
+     * 破壊的操作（カード削除・デッキ削除・履歴リセット）前のバックアップ保存＆8秒復元トースト
+     */
+    function saveTrashBackupAndNotify(message, onRestoreSuccess) {
+      const backupSnapshot = deepClone(appData);
+      try {
+        localStorage.setItem(TRASH_BACKUP_KEY, JSON.stringify({
+          savedAt: Date.now(),
+          data: backupSnapshot
+        }));
+      } catch (e) {
+        console.warn('Trash backup storage warning:', e);
+      }
+
+      showToast(message, 'warning', {
+        label: '元に戻す',
+        onAction: () => {
+          appData = deepClone(backupSnapshot);
+          saveAppData();
+          if (studyState.mode !== 'block5') {
+            buildSimpleSession(getCurrentDeck());
+          }
+          renderAllViews();
+          if (typeof onRestoreSuccess === 'function') onRestoreSuccess();
+          showToast('削除・リセット前の状態に復元しました！', 'success');
+        }
+      });
+    }
+
+    /**
+     * =========================================================================
+     * データ永続化 & 旧バージョン自動マイグレーション（サイト内データ保護）
+     * =========================================================================
+     */
+    function normalizeDeckObject(rawDeck) {
+      return {
+        id: rawDeck.id || generateId('deck'),
+        title: rawDeck.title || '復元されたデッキ',
+        description: rawDeck.description || '',
+        createdAt: rawDeck.createdAt || Date.now(),
+        cards: Array.isArray(rawDeck.cards) ? rawDeck.cards.map((c, idx) => ({
+          id: c.id || generateId(`card_${idx}`),
+          front: String(c.front || ''),
+          back: String(c.back || ''),
+          hint: String(c.hint || ''),
+          category: String(c.category || '一般'),
+          stats: {
+            attempts: Number(c.stats?.attempts || 0),
+            correct: Number(c.stats?.correct || 0),
+            wrong: Number(c.stats?.wrong || 0),
+            streak: Number(c.stats?.streak || 0),
+            lastStudied: c.stats?.lastStudied || null
+          }
+        })) : []
+      };
+    }
 
     function createInitialData() {
       const deckId = 'deck_sample_math_science';
@@ -953,13 +1171,18 @@
     }
 
     function loadAppData() {
+      // 1. まずメインの STORAGE_KEY ('studyloop_pro_math_v1') を確認
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.decks) && parsed.decks.length > 0) {
-            appData = parsed;
-            if (!appData.blockSessions) appData.blockSessions = {};
+            appData = {
+              theme: parsed.theme || 'light',
+              currentDeckId: parsed.currentDeckId || parsed.decks[0].id,
+              decks: parsed.decks.map(normalizeDeckObject),
+              blockSessions: parsed.blockSessions || {}
+            };
             if (!appData.decks.some(d => d.id === appData.currentDeckId)) {
               appData.currentDeckId = appData.decks[0].id;
             }
@@ -967,8 +1190,63 @@
           }
         }
       } catch (e) {
-        console.error('Failed to load storage:', e);
+        console.error('Failed to load primary storage:', e);
       }
+
+      // 2. 新キーが未存在の場合、localStorage 内の既存の 'studyloop*' キーを自動スキャン＆マイグレーション
+      try {
+        const migratedDecks = [];
+        const seenDeckIds = new Set();
+        let migratedSessions = {};
+        let detectedTheme = null;
+        let preferredDeckId = null;
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.toLowerCase().includes('studyloop')) continue;
+          if (key === STORAGE_KEY || key === UNDO_STORAGE_KEY || key === TRASH_BACKUP_KEY) continue;
+
+          try {
+            const legacyRaw = localStorage.getItem(key);
+            if (!legacyRaw) continue;
+            const legacyParsed = JSON.parse(legacyRaw);
+            if (legacyParsed && Array.isArray(legacyParsed.decks) && legacyParsed.decks.length > 0) {
+              if (!detectedTheme && legacyParsed.theme) detectedTheme = legacyParsed.theme;
+              if (!preferredDeckId && legacyParsed.currentDeckId) preferredDeckId = legacyParsed.currentDeckId;
+              if (legacyParsed.blockSessions && typeof legacyParsed.blockSessions === 'object') {
+                migratedSessions = { ...migratedSessions, ...legacyParsed.blockSessions };
+              }
+              legacyParsed.decks.forEach(d => {
+                const norm = normalizeDeckObject(d);
+                if (!seenDeckIds.has(norm.id)) {
+                  seenDeckIds.add(norm.id);
+                  migratedDecks.push(norm);
+                }
+              });
+            }
+          } catch (innerErr) {
+            // 他のキーのパースエラーは無視して続行
+          }
+        }
+
+        if (migratedDecks.length > 0) {
+          appData = {
+            theme: detectedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+            currentDeckId: migratedDecks.some(d => d.id === preferredDeckId) ? preferredDeckId : migratedDecks[0].id,
+            decks: migratedDecks,
+            blockSessions: migratedSessions
+          };
+          saveAppData();
+          setTimeout(() => {
+            showToast(`以前の学習データ（${migratedDecks.length}デッキ）を自動引き継ぎしました！`, 'success');
+          }, 400);
+          return;
+        }
+      } catch (scanErr) {
+        console.error('Migration scan error:', scanErr);
+      }
+
+      // 3. どのキーにもデッキが1つもない場合のみ、初期サンプル3問を作成
       appData = createInitialData();
       saveAppData();
     }
@@ -978,6 +1256,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
       } catch (e) {
         console.error('Failed to save storage:', e);
+        showToast('ブラウザの保存容量がいっぱいです。JSON保存をおすすめします。', 'error');
       }
     }
 
@@ -1136,14 +1415,13 @@
 
     /**
      * =========================================================================
-     * 苦手特訓 / 全問順番 / ランダムシャッフル セッション構築
+     * 苦手・未学習特訓 / 順番通り / シャッフル セッション構築
      * =========================================================================
      */
     function buildSimpleSession(deck) {
       studyState.isFlipped = false;
 
       if (studyState.mode === 'weakness') {
-        // 苦手・未習得抽出：誤答あり OR 正答率80%未満 OR 未習得（streak < 2）
         const candidates = deck.cards.filter(c => {
           if (c.stats.attempts === 0) return true;
           const acc = c.stats.correct / c.stats.attempts;
@@ -1197,6 +1475,8 @@
       const deck = getCurrentDeck();
       const stageEl = document.getElementById('flashcardStage');
       const completeEl = document.getElementById('studyCompleteView');
+
+      updateUndoButtonUI();
 
       // モードボタンの選択状態更新
       document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -1258,7 +1538,7 @@
           phaseBadge.innerHTML = `<i class="fa-solid fa-play-circle"></i> セット ${currentSetNum}/${totalBlocks} ・ 本編学習中 (${doneInBlock}/${session.currentBlockLearnTotal}問目)`;
         } else if (session.phase === 'review') {
           phaseBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/70 dark:text-rose-200';
-          phaseBadge.innerHTML = `<i class="fa-solid fa-rotate-left"></i> セット ${currentSetNum}/${totalBlocks} ・ 振り返り復習中 (残り ${session.queue.length}問)`;
+          phaseBadge.innerHTML = `<i class="fa-solid fa-rotate-left"></i> セット ${currentSetNum}/${totalBlocks} ・ 振り返り復習フェーズ (残り ${session.queue.length}問)`;
         } else if (session.phase === 'final_review') {
           phaseBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/70 dark:text-amber-200';
           phaseBadge.innerHTML = `<i class="fa-solid fa-fire"></i> 最終振り返りループ (残り ${session.queue.length}問)`;
@@ -1275,7 +1555,7 @@
       } else {
         if (studyState.mode === 'weakness') {
           document.getElementById('weaknessSummaryText').innerHTML =
-            `<i class="fa-solid fa-circle-exclamation mr-1"></i>抽出された苦手・未習得問題: ${studyState.simpleTotal}問`;
+            `<i class="fa-solid fa-circle-exclamation mr-1"></i>抽出された苦手・未学習問題: ${studyState.simpleTotal}問`;
         } else {
           const catSelect = document.getElementById('studyCategoryFilter');
           const categories = ['ALL', ...new Set(deck.cards.map(c => c.category).filter(Boolean))];
@@ -1310,8 +1590,8 @@
         const currentNum = studyState.simpleIndex + 1;
         const pct = Math.round((studyState.simpleIndex / Math.max(1, studyState.simpleTotal)) * 100);
         document.getElementById('progressLeftLabel').textContent = studyState.mode === 'weakness'
-          ? '苦手・未習得特訓中'
-          : (studyState.mode === 'shuffle' ? 'ランダムシャッフル演習' : '全問順番演習');
+          ? '苦手・未学習特訓中'
+          : (studyState.mode === 'shuffle' ? 'シャッフル演習' : '順番通り（全問）演習');
         document.getElementById('progressRightLabel').textContent = `${currentNum} / ${studyState.simpleTotal} 問`;
         document.getElementById('studyProgressBar').style.width = `${pct}%`;
 
@@ -1373,7 +1653,6 @@
       const icon = document.getElementById('redSheetIcon');
       const btn = document.getElementById('btnToggleRedSheet');
 
-      // 前回チラ見した個別要素をリセット
       document.querySelectorAll('.red-mask.peeked').forEach(el => el.classList.remove('peeked'));
 
       if (studyState.redSheetMode) {
@@ -1405,6 +1684,9 @@
       }
 
       if (!currentCard) return;
+
+      // 判定を実行する「直前」の状態を undoStack にスナップショット保存
+      pushStudyUndoSnapshot();
 
       currentCard.stats.attempts += 1;
       currentCard.stats.lastStudied = Date.now();
@@ -1482,7 +1764,7 @@
         }).join('');
       }
 
-      // 問題別成績・苦手リスト（全カードまたは誤答ありカードを正答率順に並べて表示）
+      // 問題別成績・苦手リスト
       const sortedCards = [...deck.cards].sort((a, b) => {
         if (a.stats.wrong > 0 && b.stats.wrong === 0) return -1;
         if (b.stats.wrong > 0 && a.stats.wrong === 0) return 1;
@@ -1530,7 +1812,6 @@
           `;
         }).join('');
 
-        // リスト内の裏面テキストにも赤シート＋KaTeX数式を適用
         rankEl.querySelectorAll('.stat-card-back').forEach(el => {
           renderRichMathContent(el, el.dataset.rawBack);
         });
@@ -1635,24 +1916,24 @@
     window.deleteCard = async function(cardId) {
       const ok = await showCustomDialog({
         title: '問題の削除',
-        message: 'この問題をデッキから削除しますか？（この操作は取り消せません）',
+        message: 'この問題をデッキから削除しますか？\n（削除後8秒間は右下の「元に戻す」から復元できます）',
         confirmText: '削除する',
         confirmDanger: true
       });
       if (!ok) return;
 
       const deck = getCurrentDeck();
+      saveTrashBackupAndNotify('問題を1問削除しました');
+
       deck.cards = deck.cards.filter(c => c.id !== cardId);
       saveAppData();
       renderDeckSelector();
       renderManageView();
-      showToast('問題を削除しました', 'info');
     };
 
     /**
      * AI連携・一括インポートパーサー
      * 形式: カテゴリ名 | 問題文（表面） | 【重要語句や数式】と解説（裏面） | ヒント
-     * （旧3列・2列形式およびJSON配列も柔軟に自動判定）
      */
     function parseBulkText(rawText) {
       const trimmed = rawText.trim();
@@ -1686,7 +1967,6 @@
 
         const parts = line.split(delimiter).map(p => p.trim());
         if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
-          // 4列形式: カテゴリ名 | 問題文（表面） | 答え・解説（裏面） | ヒント
           results.push({
             category: parts[0],
             front: parts[1],
@@ -1694,7 +1974,6 @@
             hint: parts[3] || ''
           });
         } else if (parts.length === 2 && parts[0] && parts[1]) {
-          // 2列簡易形式: 問題文 | 答え
           results.push({
             category: '一般',
             front: parts[0],
@@ -1765,7 +2044,11 @@
         });
       });
 
-      // 5問1セットリセット
+      // ↩ 1つ戻る (Z) ボタン
+      document.getElementById('btnUndoAnswer').addEventListener('click', handleUndoLastAnswer);
+      document.getElementById('btnCompleteUndoLast').addEventListener('click', handleUndoLastAnswer);
+
+      // 5問1セットリセット（8秒復元トースト付き）
       document.getElementById('btnResetBlockSession').addEventListener('click', async () => {
         const ok = await showCustomDialog({
           title: '5問1セット進捗のリセット',
@@ -1773,10 +2056,11 @@
           confirmText: '最初からやり直す'
         });
         if (!ok) return;
+
+        saveTrashBackupAndNotify('5問1セットの進行状況をリセットしました');
         initOrRepairBlockSession(getCurrentDeck(), true);
         studyState.isFlipped = false;
         renderStudyView();
-        showToast('セット1から再開しました', 'info');
       });
 
       // 順番・シャッフルモードサブ操作
@@ -1794,7 +2078,7 @@
       document.getElementById('btnReloadWeakness').addEventListener('click', () => {
         buildSimpleSession(getCurrentDeck());
         renderStudyView();
-        showToast('最新の履歴から苦手・未習得問題を抽出しました', 'info');
+        showToast('最新の履歴から苦手・未学習問題を抽出しました', 'info');
       });
 
       // 完了画面ボタン
@@ -1817,7 +2101,6 @@
       document.getElementById('flashcardInner').addEventListener('click', (e) => {
         if (e.target.closest('#btnShowHint')) return;
 
-        // 赤シートON時に隠れた赤枠をタップした場合は、カード反転ではなくその枠をチラ見トグル
         const maskEl = e.target.closest('.red-mask');
         if (studyState.redSheetMode && maskEl) {
           e.stopPropagation();
@@ -1841,7 +2124,7 @@
       document.getElementById('btnJudgeWrong').addEventListener('click', () => handleJudge(false));
       document.getElementById('btnJudgeCorrect').addEventListener('click', () => handleJudge(true));
 
-      // キーボードショートカット
+      // キーボードショートカット（Space, 1/←, 2/→, Z/Backspace, H, R）
       document.addEventListener('keydown', (e) => {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -1859,6 +2142,9 @@
         } else if (e.key === '2' || e.key === 'ArrowRight') {
           e.preventDefault();
           handleJudge(true);
+        } else if (e.key.toLowerCase() === 'z' || e.key === 'Backspace') {
+          e.preventDefault();
+          handleUndoLastAnswer();
         } else if (e.key.toLowerCase() === 'h') {
           const hintBtn = document.getElementById('btnShowHint');
           if (!hintBtn.classList.contains('hidden')) {
@@ -1881,25 +2167,26 @@
       document.getElementById('btnResetDeckStats').addEventListener('click', async () => {
         const ok = await showCustomDialog({
           title: '学習履歴のリセット',
-          message: 'このデッキの全問題の正答率・誤答履歴を0にリセットしますか？',
+          message: 'このデッキの全問題の正答率・誤答履歴を0にリセットしますか？\n（リセット後8秒間は右下の「元に戻す」から復元できます）',
           confirmText: 'リセットする',
           confirmDanger: true
         });
         if (!ok) return;
+
+        saveTrashBackupAndNotify('学習履歴をリセットしました');
         const deck = getCurrentDeck();
         deck.cards.forEach(c => {
           c.stats = { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null };
         });
         saveAppData();
         renderStatsView();
-        showToast('学習履歴をリセットしました', 'info');
       });
 
       // 新規デッキ作成
       document.getElementById('btnNewDeckModal').addEventListener('click', async () => {
         const title = await showCustomDialog({
           title: '新しい学習デッキを作成',
-          message: '科目名やテスト範囲のタイトルを入力してください（例：数学II・微分積分）',
+          message: '科目名やテスト範囲のタイトルを入力してください（例：世界史・イスラーム世界）',
           showInput: true,
           confirmText: '作成する'
         });
@@ -1949,18 +2236,20 @@
         const deck = getCurrentDeck();
         const ok = await showCustomDialog({
           title: 'デッキの削除',
-          message: `「${deck.title}」（${deck.cards.length}問）を完全に削除しますか？`,
+          message: `「${deck.title}」（${deck.cards.length}問）を削除しますか？\n（削除後8秒間は右下の「元に戻す」から復元できます）`,
           confirmText: '削除する',
           confirmDanger: true
         });
         if (!ok) return;
+
+        const deletedTitle = deck.title;
+        saveTrashBackupAndNotify(`デッキ「${deletedTitle}」を削除しました`);
 
         appData.decks = appData.decks.filter(d => d.id !== deck.id);
         delete appData.blockSessions[deck.id];
         appData.currentDeckId = appData.decks[0].id;
         saveAppData();
         renderAllViews();
-        showToast('デッキを削除しました', 'info');
       });
 
       // ライブプレビュー＆クイック挿入ボタン
@@ -2084,7 +2373,7 @@
           return;
         }
         previewWrap.classList.remove('hidden');
-        previewList.innerHTML = parsed.slice(0, 3).map((item, idx) => `
+        previewList.innerHTML = parsed.slice(0, 3).map((item) => `
           <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
             <span class="font-bold text-indigo-600 dark:text-indigo-400">[${escapeHtml(item.category)}]</span>
             <span class="font-bold">${escapeHtml(item.front)}</span>
@@ -2174,7 +2463,7 @@
         showToast('JSONバックアップファイルを保存しました', 'success');
       });
 
-      // JSONインポート
+      // JSONインポート（統合・上書き選択ダイアログ付き）
       document.getElementById('inputImportJson').addEventListener('change', (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -2185,6 +2474,18 @@
             const imported = JSON.parse(ev.target.result);
             if (!imported || !Array.isArray(imported.decks)) {
               throw new Error('Invalid format');
+            }
+
+            const isOverwrite = await showCustomDialog({
+              title: 'JSONデータの読み込み方法',
+              message: '現在のデータを残したまま新しい問題・デッキを「統合（追加）」しますか？\n（※「はい（統合して追加）」を押すと既存のデッキや学習記録は消えません）',
+              confirmText: '統合して追加（安全）',
+              showCancel: true
+            });
+
+            if (isOverwrite === null) {
+              e.target.value = '';
+              return;
             }
 
             let addedDecks = 0;
@@ -2208,20 +2509,7 @@
                   }
                 });
               } else {
-                appData.decks.push({
-                  id: impDeck.id || generateId('deck'),
-                  title: impDeck.title || 'インポートされたデッキ',
-                  description: impDeck.description || '',
-                  createdAt: impDeck.createdAt || Date.now(),
-                  cards: (impDeck.cards || []).map(c => ({
-                    id: c.id || generateId('card'),
-                    front: c.front,
-                    back: c.back,
-                    hint: c.hint || '',
-                    category: c.category || '一般',
-                    stats: c.stats || { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null }
-                  }))
-                });
+                appData.decks.push(normalizeDeckObject(impDeck));
                 addedDecks += 1;
               }
             });
@@ -2261,6 +2549,7 @@
     // 起動処理
     window.addEventListener('DOMContentLoaded', () => {
       loadAppData();
+      loadUndoStack();
       applyTheme();
       bindEvents();
       renderAllViews();
