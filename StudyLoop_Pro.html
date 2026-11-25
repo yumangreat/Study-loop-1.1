@@ -1,0 +1,3824 @@
+<!DOCTYPE html>
+<html lang="ja" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>StudyLoop Pro - 数式・赤シート・4択・入力対応 学習Webアプリ</title>
+
+  <!-- iPad / iOS Safari ホーム画面追加（全画面アプリ化）対応メタタグ -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="StudyLoop Pro" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#4f46e5" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- KaTeX (LaTeX数式レンダリングエンジン) CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
+  <!-- LZ-String & QRCodeJS (サーバー不要URL/QR共有用) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* iPad Safari Safe-Area（ノッチ・ステータスバー・ホームバー余白）対応 */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    /* 3Dフリップカード */
+    .perspective-1400 {
+      perspective: 1400px;
+    }
+    .flip-card-grid {
+      display: grid;
+      transform-style: preserve-3d;
+      transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .flip-face {
+      grid-area: 1 / 1;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+
+    /* スワイプドラッグコンテナ */
+    .swipe-wrapper {
+      touch-action: pan-y;
+      will-change: transform;
+    }
+    .swipe-spring-back {
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* 【...】赤シートハイライト＆マスクスタイル */
+    .red-mask {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      margin: 0.1rem 0.15rem;
+      border-radius: 0.45rem;
+      font-weight: 700;
+      background-color: rgba(244, 63, 94, 0.13);
+      color: #e11d48;
+      border: 1.5px solid rgba(244, 63, 94, 0.38);
+      transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      vertical-align: middle;
+    }
+    .dark .red-mask {
+      background-color: rgba(244, 63, 94, 0.22);
+      color: #fda4af;
+      border-color: rgba(251, 113, 133, 0.45);
+    }
+    .red-mask:has(.katex-display) {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      margin: 0.5rem auto;
+      padding: 0.35rem 0.9rem;
+    }
+
+    /* 赤シート隠すモード ON 時の完全遮蔽 */
+    .red-sheet-active .red-mask:not(.peeked) {
+      background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+      border-color: #be123c !important;
+      color: transparent !important;
+      box-shadow: 0 2px 6px rgba(225, 29, 72, 0.25);
+      cursor: pointer;
+      user-select: none;
+    }
+    .red-sheet-active .red-mask:not(.peeked) * {
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+    .red-sheet-active .red-mask:hover,
+    .red-sheet-active .red-mask.peeked {
+      background: rgba(244, 63, 94, 0.16) !important;
+      border-style: dashed !important;
+      cursor: pointer;
+    }
+    .red-sheet-active .red-mask:hover *,
+    .red-sheet-active .red-mask.peeked * {
+      opacity: 1 !important;
+    }
+
+    /* 赤文字入力モードのインライン入力欄 */
+    .typing-blank-input {
+      display: inline-block;
+      min-width: 7.5rem;
+      max-width: 100%;
+      padding: 0.25rem 0.65rem;
+      margin: 0.15rem 0.2rem;
+      border-radius: 0.6rem;
+      border: 2px solid #f43f5e;
+      background-color: #fff1f2;
+      color: #be123c;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .dark .typing-blank-input {
+      background-color: rgba(136, 19, 55, 0.35);
+      color: #fecdd3;
+      border-color: #fb7185;
+    }
+    .typing-blank-input:focus {
+      box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.25);
+      border-color: #e11d48;
+    }
+    .typing-blank-input.input-correct {
+      border-color: #10b981;
+      background-color: #ecfdf5;
+      color: #065f46;
+    }
+    .dark .typing-blank-input.input-correct {
+      border-color: #34d399;
+      background-color: rgba(6, 78, 59, 0.45);
+      color: #a7f3d0;
+    }
+    .typing-blank-input.input-wrong {
+      border-color: #e11d48;
+      background-color: #ffe4e6;
+      color: #9f1239;
+    }
+
+    /* KaTeX表示微調整 */
+    .katex-display {
+      margin: 0.4em 0 !important;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.15rem 0;
+    }
+
+    /* 8秒カウントダウンバーアニメーション */
+    @keyframes shrinkProgress {
+      from { width: 100%; }
+      to { width: 0%; }
+    }
+    .undo-timer-bar {
+      animation: shrinkProgress 8s linear forwards;
+    }
+
+    /* スクロールバー美化 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    button, .cursor-pointer {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 試験直前チートシート印刷用スタイル */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+      }
+      header, .no-print, #toastContainer, #customDialog {
+        display: none !important;
+      }
+      main {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      #tab-cram {
+        display: block !important;
+      }
+      .cram-row {
+        break-inside: avoid;
+        border-color: #cbd5e1 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200 antialiased">
+
+  <!-- ==================== ヘッダー ==================== -->
+  <header class="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+    <div class="max-w-5xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
+      <!-- ロゴ -->
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 via-violet-600 to-rose-500 flex items-center justify-center text-white shadow-sm">
+          <i class="fa-solid fa-layer-group text-base"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-extrabold text-base sm:text-lg tracking-tight leading-none">StudyLoop</h1>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/80 dark:text-indigo-300">PRO</span>
+          </div>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 hidden sm:block">数式・赤シート・4択・入力 学習</p>
+        </div>
+      </div>
+
+      <!-- デッキ選択ドロップダウン -->
+      <div class="flex-1 max-w-xs sm:max-w-md mx-1">
+        <div class="relative">
+          <select id="deckSelector" aria-label="学習デッキ選択"
+            class="w-full appearance-none bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-3 pr-8 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate cursor-pointer">
+          </select>
+          <i class="fa-solid fa-chevron-down text-xs text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+        </div>
+      </div>
+
+      <!-- 右側アクション -->
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button id="btnNewDeckModal" title="新規デッキ作成"
+          class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-plus"></i>
+          <span class="hidden sm:inline">新規デッキ</span>
+        </button>
+        <button id="btnToggleTheme" title="ダーク/ライトモード切替"
+          class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition">
+          <i id="themeIcon" class="fa-solid fa-moon"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ナビゲーションタブ（4タブ構成） -->
+    <nav class="max-w-5xl mx-auto px-2 sm:px-6 flex gap-1 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto">
+      <button data-tab="study" class="nav-tab flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 flex items-center justify-center gap-1.5 whitespace-nowrap transition">
+        <i class="fa-solid fa-graduation-cap"></i> 学習モード
+      </button>
+      <button data-tab="cram" class="nav-tab flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center gap-1.5 whitespace-nowrap transition">
+        <i class="fa-solid fa-table-list"></i> 直前一覧シート
+      </button>
+      <button data-tab="stats" class="nav-tab flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center gap-1.5 whitespace-nowrap transition">
+        <i class="fa-solid fa-chart-line"></i> 成績・分析
+      </button>
+      <button data-tab="manage" class="nav-tab flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center gap-1.5 whitespace-nowrap transition">
+        <i class="fa-solid fa-sliders"></i> 問題追加・管理
+      </button>
+    </nav>
+  </header>
+
+  <!-- ==================== メインコンテンツ ==================== -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 space-y-4">
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: 学習モード（重なりのない整理されたコントロール群）     -->
+    <!-- ============================================================ -->
+    <section id="tab-study" class="space-y-3.5">
+
+      <!-- コントロールパネル：進行ルール / 出題形式 / 向き・並び順・試験日 -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-3">
+        
+        <!-- Row 1: 進行ルール (Progression Mode) -->
+        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+          <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider shrink-0 w-16">進行ルール</span>
+          <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 flex-1">
+            <button data-prog="block5" class="prog-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-repeat"></i> 5問1セット
+            </button>
+            <button data-prog="all" class="prog-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-layer-group"></i> 通常・全問
+            </button>
+            <button data-prog="weakness" class="prog-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-fire"></i> 苦手・★特訓
+            </button>
+            <button data-prog="srs" class="prog-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-clock-rotate-left"></i> 忘却曲線 (SRS)
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 2: 出題形式 (Question Format) - 進行ルールと独立して切り替え可能 -->
+        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+          <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider shrink-0 w-16">出題形式</span>
+          <div class="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 flex-1">
+            <button data-format="flip" class="format-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-clone"></i> カードめくり
+            </button>
+            <button data-format="choice4" class="format-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-list-ol"></i> ランダム4択
+            </button>
+            <button data-format="typing" class="format-btn px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-keyboard"></i> 赤文字入力
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 3: 向き・並び順・試験日カウントダウン -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <!-- 出題向き切替 -->
+            <button id="btnToggleDirection" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5">
+              <i class="fa-solid fa-right-left text-indigo-500"></i>
+              <span id="directionLabel">通常 (問題→答え)</span>
+            </button>
+
+            <!-- 並び順切替 -->
+            <button id="btnToggleOrder" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5">
+              <i id="orderIcon" class="fa-solid fa-arrow-down-1-9 text-emerald-500"></i>
+              <span id="orderLabel">登録順</span>
+            </button>
+
+            <!-- カテゴリフィルタ（通常・全問モード時） -->
+            <select id="studyCategoryFilter" class="hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-bold cursor-pointer">
+              <option value="ALL">全カテゴリ</option>
+            </select>
+          </div>
+
+          <!-- 試験日カウントダウン & 1日ノルマバッジ -->
+          <button id="btnSetExamDate" title="試験日を設定して1日の目標枚数を自動計算"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/70 hover:bg-indigo-100 transition flex items-center gap-1.5">
+            <i class="fa-regular fa-calendar-check"></i>
+            <span id="examCountdownText">試験日を設定</span>
+          </button>
+        </div>
+
+        <!-- Row 4: 進行ルール別の状態バッジ＆リセットボタン -->
+        <div id="subStatusBar" class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="modeStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/70 dark:text-indigo-200">
+              セット 1/1 ・ 本編学習中
+            </span>
+            <span id="blockCarryOverBadge" class="hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+              <i class="fa-solid fa-forward"></i> 次回振り返り繰り越し: <span id="carryOverCount">0</span>問
+            </span>
+          </div>
+          <button id="btnResetSession" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+            <i class="fa-solid fa-rotate-left mr-1"></i>セッション最初から
+          </button>
+        </div>
+      </div>
+
+      <!-- プログレスバー＆無音「↩ 1つ戻る (Z)」操作バー -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl px-4 py-2.5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between text-xs font-semibold mb-1.5">
+            <span id="progressLeftLabel" class="text-slate-600 dark:text-slate-300 truncate">進捗状況</span>
+            <span id="progressRightLabel" class="text-indigo-600 dark:text-indigo-400 font-bold shrink-0 ml-2">0 / 0 問</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div id="studyProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- 無音1つ戻るボタン -->
+        <button id="btnUndoAnswer" disabled title="直前の判定を取り消して1つ前の問題に戻ります (ショートカット: Z / Backspace)"
+          class="shrink-0 px-3 py-2 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/70 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm active:scale-95">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>1つ戻る</span>
+          <span class="hidden sm:inline text-[10px] opacity-75 font-mono">(Z)</span>
+          <span id="undoStackBadge" class="px-1.5 py-0.2 rounded-md bg-amber-200/80 dark:bg-amber-800 text-[10px] font-mono">0</span>
+        </button>
+      </div>
+
+      <!-- 学習完了画面 -->
+      <div id="studyCompleteView" class="hidden bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 text-center shadow-md border border-slate-200 dark:border-slate-800 space-y-4">
+        <div class="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto text-3xl">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <h2 id="completeTitle" class="text-xl sm:text-2xl font-extrabold">セッション完了！</h2>
+        <p id="completeMessage" class="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+          すべての問題をクリアしました。
+        </p>
+        <div class="flex flex-wrap justify-center gap-3 pt-2">
+          <button id="btnCompleteUndoLast" class="hidden px-4 py-3 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/70 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-bold text-sm shadow-sm transition">
+            <i class="fa-solid fa-rotate-left mr-1.5"></i>最後の判定を取り消して戻る (Z)
+          </button>
+          <button id="btnCompleteRestart" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm transition">
+            <i class="fa-solid fa-rotate-right mr-1.5"></i>もう一度学習する
+          </button>
+          <button id="btnCompletePracticeAllSrs" class="hidden px-5 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm shadow-sm transition">
+            <i class="fa-solid fa-forward mr-1.5"></i>期限前倒しで全問復習
+          </button>
+          <button id="btnCompleteGoWeakness" class="px-5 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm shadow-sm transition">
+            <i class="fa-solid fa-fire mr-1.5"></i>苦手・★問題だけ特訓
+          </button>
+        </div>
+      </div>
+
+      <!-- ==================== アクティブ学習ステージ ==================== -->
+      <div id="activeStudyStage" class="space-y-3.5">
+        <!-- カード共通メタツールバー（カテゴリ・戦績・★ピン留め・赤シート切替） -->
+        <div class="flex flex-wrap items-center justify-between gap-2 px-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span id="cardNumberBadge" class="px-2 py-1 rounded-lg text-xs font-mono font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300">#1</span>
+            <span id="cardCategoryBadge" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300">
+              カテゴリ
+            </span>
+            <span id="cardStatsBadge" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400">
+              未学習
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- ★ ピン留め（勘で正解・要チェック）ボタン -->
+            <button id="btnToggleStar" title="★ピン留め（勘で正解した問題や重点チェック問題にマーク）"
+              class="px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-400">
+              <i id="starIcon" class="fa-regular fa-star"></i>
+              <span id="starLabel">ピン留め</span>
+            </button>
+
+            <!-- 赤シート隠すボタン（カードめくり形式時） -->
+            <button id="btnToggleRedSheet" class="px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-white dark:bg-slate-900 border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 shadow-sm">
+              <i class="fa-solid fa-eye-slash" id="redSheetIcon"></i>
+              <span id="redSheetLabel">赤シート: OFF</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- 形式A: カードめくり（左右スワイプ◯×判定対応）           -->
+        <!-- ======================================================== -->
+        <div id="formatFlipContainer" class="space-y-3.5">
+          <div class="perspective-1400 w-full relative overflow-hidden rounded-3xl">
+            <div id="swipeCardWrapper" class="swipe-wrapper relative">
+              
+              <!-- スワイプ判定オーバーレイバッジ（右＝◯ 覚えた / 左＝× もう一度） -->
+              <div id="swipeOverlayRight" class="pointer-events-none absolute inset-0 z-20 rounded-3xl bg-emerald-500/20 border-4 border-emerald-500 flex items-center justify-start pl-8 opacity-0 transition-opacity duration-75">
+                <div class="px-5 py-3 rounded-2xl bg-emerald-600 text-white font-extrabold text-xl sm:text-2xl shadow-lg -rotate-6 flex items-center gap-2">
+                  <i class="fa-regular fa-circle"></i> 覚えた
+                </div>
+              </div>
+              <div id="swipeOverlayLeft" class="pointer-events-none absolute inset-0 z-20 rounded-3xl bg-rose-500/20 border-4 border-rose-500 flex items-center justify-end pr-8 opacity-0 transition-opacity duration-75">
+                <div class="px-5 py-3 rounded-2xl bg-rose-600 text-white font-extrabold text-xl sm:text-2xl shadow-lg rotate-6 flex items-center gap-2">
+                  <i class="fa-solid fa-xmark"></i> もう一度
+                </div>
+              </div>
+
+              <!-- 3Dフリップカード本体 -->
+              <div id="flashcardInner" class="flip-card-grid w-full min-h-[290px] sm:min-h-[340px] cursor-pointer select-none">
+                
+                <!-- 表面 -->
+                <div class="flip-face bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-8 shadow-md border-2 border-slate-200/90 dark:border-slate-800 flex flex-col justify-between">
+                  <div class="flex items-center justify-between">
+                    <span id="frontSideBadge" class="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-indigo-500"></span> QUESTION（表面・問題）
+                    </span>
+                    <span class="text-[11px] text-slate-400 font-medium">タップで裏面へ</span>
+                  </div>
+
+                  <div class="my-auto py-4 text-center space-y-3">
+                    <div id="cardFrontImageWrap" class="hidden">
+                      <img id="cardFrontImage" src="" alt="問題添付画像" class="max-h-44 mx-auto rounded-xl border border-slate-200 dark:border-slate-700 object-contain shadow-sm" />
+                    </div>
+                    <div id="cardFrontText" class="text-base sm:text-xl md:text-2xl font-bold leading-relaxed text-slate-900 dark:text-white whitespace-pre-line"></div>
+                  </div>
+
+                  <!-- ヒント表示エリア -->
+                  <div class="space-y-2">
+                    <div id="cardHintBox" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs sm:text-sm text-amber-900 dark:text-amber-200 text-center">
+                      <i class="fa-solid fa-lightbulb text-amber-500 mr-1.5"></i>
+                      <span id="cardHintText"></span>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                      <button type="button" id="btnShowHint" class="px-3 py-1.5 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 transition">
+                        <i class="fa-regular fa-lightbulb mr-1"></i>ヒントを見る (H)
+                      </button>
+                      <span class="text-[11px] text-slate-400">
+                        裏面表示後に右スワイプで◯・左スワイプで×
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 裏面 -->
+                <div class="flip-face rotate-y-180 bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-900/95 rounded-3xl p-5 sm:p-8 shadow-md border-2 border-indigo-500/50 dark:border-indigo-500/40 flex flex-col justify-between">
+                  <div class="flex items-center justify-between">
+                    <span id="backSideBadge" class="text-xs font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-rose-500"></span> ANSWER（裏面・答えと解説）
+                    </span>
+                    <span class="text-[11px] text-slate-400 font-medium">←左スワイプで× / 右スワイプで◯→</span>
+                  </div>
+
+                  <div id="cardBackContainer" class="my-auto py-4 text-center space-y-3">
+                    <div id="cardBackText" class="text-base sm:text-xl font-bold leading-relaxed text-slate-900 dark:text-slate-100 whitespace-pre-line"></div>
+                    <div id="reverseContextBox" class="hidden p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-xs sm:text-sm text-slate-600 dark:text-slate-300 text-left"></div>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-200/70 dark:border-slate-800 text-center">
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                      赤シートON時は赤枠タップでチラ見 ／ 大きく右スワイプで「覚えた」、左スワイプで「もう一度」
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 下部判定ボタン（通常判定 or 忘却曲線SRS 3段階判定） -->
+          <div id="standardJudgeButtons" class="grid grid-cols-2 gap-3 sm:gap-4">
+            <button id="btnJudgeWrong" class="py-3.5 sm:py-4 px-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-rose-500/80 hover:bg-rose-500 text-rose-600 dark:text-rose-400 hover:text-white font-extrabold text-sm sm:text-base shadow-sm transition active:scale-[0.98] flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-xmark text-lg"></i>
+                <span>もう一度（不正解）</span>
+              </div>
+              <span class="text-[10px] opacity-75 font-mono">[1 / ←キー]</span>
+            </button>
+
+            <button id="btnJudgeCorrect" class="py-3.5 sm:py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border-2 border-emerald-600 text-white font-extrabold text-sm sm:text-base shadow-sm transition active:scale-[0.98] flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-check text-lg"></i>
+                <span>覚えた（正解）</span>
+              </div>
+              <span class="text-[10px] opacity-85 font-mono">[2 / →キー]</span>
+            </button>
+          </div>
+
+          <!-- 忘却曲線 (SRS) 用 3段階ボタン -->
+          <div id="srsJudgeButtons" class="hidden grid grid-cols-3 gap-2 sm:gap-3">
+            <button data-srs="again" class="srs-judge-btn py-3.5 px-2 rounded-2xl bg-white dark:bg-slate-900 border-2 border-rose-500 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white font-extrabold text-xs sm:text-sm shadow-sm transition flex flex-col items-center justify-center gap-0.5">
+              <span>もう一度</span>
+              <span class="text-[10px] opacity-80">1分後</span>
+            </button>
+            <button data-srs="good" class="srs-judge-btn py-3.5 px-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 border-2 border-indigo-600 text-white font-extrabold text-xs sm:text-sm shadow-sm transition flex flex-col items-center justify-center gap-0.5">
+              <span>普通（覚えた）</span>
+              <span id="srsGoodIntervalLabel" class="text-[10px] opacity-90">1日後</span>
+            </button>
+            <button data-srs="easy" class="srs-judge-btn py-3.5 px-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border-2 border-emerald-600 text-white font-extrabold text-xs sm:text-sm shadow-sm transition flex flex-col items-center justify-center gap-0.5">
+              <span>余裕！</span>
+              <span id="srsEasyIntervalLabel" class="text-[10px] opacity-90">3日後</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- 形式B: ランダム4択モード                                 -->
+        <!-- ======================================================== -->
+        <div id="formatChoice4Container" class="hidden space-y-3.5">
+          <!-- 問題文カード -->
+          <div class="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-7 shadow-md border-2 border-slate-200/90 dark:border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                <i class="fa-solid fa-list-ol mr-1"></i> 4択問題（最も適切なものを選べ）
+              </span>
+              <button type="button" id="btnChoice4Hint" class="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline">
+                <i class="fa-regular fa-lightbulb mr-1"></i>ヒント
+              </button>
+            </div>
+            <div id="choice4ImageWrap" class="hidden text-center">
+              <img id="choice4Image" src="" alt="問題画像" class="max-h-40 mx-auto rounded-xl border border-slate-200 dark:border-slate-700 object-contain" />
+            </div>
+            <div id="choice4QuestionText" class="text-base sm:text-xl font-bold leading-relaxed text-slate-900 dark:text-white whitespace-pre-line"></div>
+            <div id="choice4HintBox" class="hidden p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200"></div>
+          </div>
+
+          <!-- 4つの選択肢グリッド -->
+          <div id="choice4OptionsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3"></div>
+
+          <!-- 回答後の解説＆「勘で正解 ★」＆次へバー -->
+          <div id="choice4ResultPanel" class="hidden bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border-2 border-indigo-200 dark:border-indigo-800 shadow-sm space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span id="choice4ResultBadge" class="px-3 py-1 rounded-full text-xs font-extrabold"></span>
+              <button id="btnChoice4LuckyGuess" class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/70 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-star text-amber-500"></i>
+                <span id="luckyGuessBtnLabel">勘で正解（★ピン留め）</span>
+              </button>
+            </div>
+            <div id="choice4ExplanationText" class="text-sm sm:text-base font-medium leading-relaxed text-slate-800 dark:text-slate-100 whitespace-pre-line p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70"></div>
+            <div class="flex justify-end">
+              <button id="btnChoice4Next" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-sm transition flex items-center justify-center gap-2">
+                <span>次の問題へ進む</span>
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- 形式C: 赤文字入力（穴埋めタイピング）モード              -->
+        <!-- ======================================================== -->
+        <div id="formatTypingContainer" class="hidden space-y-3.5">
+          <div class="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-7 shadow-md border-2 border-slate-200/90 dark:border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                <i class="fa-solid fa-keyboard mr-1"></i> 赤文字入力（空欄に当てはまる語句・式を入力）
+              </span>
+              <button type="button" id="btnTypingHint" class="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline">
+                <i class="fa-regular fa-lightbulb mr-1"></i>ヒント
+              </button>
+            </div>
+
+            <div id="typingImageWrap" class="hidden text-center">
+              <img id="typingImage" src="" alt="問題画像" class="max-h-40 mx-auto rounded-xl border border-slate-200 dark:border-slate-700 object-contain" />
+            </div>
+
+            <!-- 問題文 -->
+            <div id="typingQuestionText" class="text-base sm:text-lg font-bold leading-relaxed text-slate-900 dark:text-white whitespace-pre-line pb-3 border-b border-slate-100 dark:border-slate-800"></div>
+            <div id="typingHintBox" class="hidden p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200"></div>
+
+            <!-- インライン空欄入力エリア -->
+            <div id="typingClozeArea" class="text-base sm:text-lg font-bold leading-loose text-slate-800 dark:text-slate-100 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700"></div>
+
+            <div id="typingSubmitRow" class="flex justify-end gap-2">
+              <button id="btnTypingGiveUp" type="button" class="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold text-xs sm:text-sm transition">
+                わからない（答えを見る）
+              </button>
+              <button id="btnTypingSubmit" type="button" class="px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-sm shadow-sm transition flex items-center gap-2">
+                <i class="fa-solid fa-check"></i> 答え合わせ
+              </button>
+            </div>
+          </div>
+
+          <!-- 入力判定後の結果＆「正解扱いにする」救済パネル -->
+          <div id="typingResultPanel" class="hidden bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border-2 border-indigo-200 dark:border-indigo-800 shadow-sm space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span id="typingResultBadge" class="px-3 py-1 rounded-full text-xs font-extrabold"></span>
+              <button id="btnTypingOverrideCorrect" type="button" class="hidden px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 transition">
+                <i class="fa-solid fa-circle-check mr-1"></i>正解扱いにする（表記ゆれ救済）
+              </button>
+            </div>
+            <div id="typingFullAnswerText" class="text-sm sm:text-base font-bold leading-relaxed text-slate-800 dark:text-slate-100 whitespace-pre-line p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70"></div>
+            <div class="flex justify-end">
+              <button id="btnTypingNext" type="button" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-sm transition flex items-center justify-center gap-2">
+                <span>次の問題へ進む</span>
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: 試験直前「チートシート一覧ビュー」                     -->
+    <!-- ============================================================ -->
+    <section id="tab-cram" class="hidden space-y-4">
+      <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-3 no-print">
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="cramCategoryFilter" class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold cursor-pointer">
+            <option value="ALL">すべてのカテゴリ</option>
+          </select>
+          <input type="text" id="cramSearchInput" placeholder="キーワード絞り込み..."
+            class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btnToggleCramRedSheet" class="px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-eye-slash"></i>
+            <span id="cramRedSheetLabel">一覧赤シート: OFF</span>
+          </button>
+          <button id="btnPrintCramSheet" class="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center gap-1.5">
+            <i class="fa-solid fa-print"></i>
+            <span>印刷 / PDF保存</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="cramSheetContainer" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <h2 id="cramDeckHeaderTitle" class="font-extrabold text-sm sm:text-base">試験直前まとめ一覧</h2>
+          <span id="cramCountBadge" class="text-xs font-bold text-slate-500">0問</span>
+        </div>
+        <div id="cramListBody" class="divide-y divide-slate-200/80 dark:divide-slate-800"></div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB 3: 成績・苦手分析ダッシュボード                          -->
+    <!-- ============================================================ -->
+    <section id="tab-stats" class="hidden space-y-5">
+      <!-- KPIサマリー -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">総問題数</p>
+          <p id="statTotalCards" class="text-2xl font-extrabold mt-1">0問</p>
+        </div>
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">習得済み (連続2回)</p>
+          <p id="statMasteredCards" class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">0問</p>
+        </div>
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">全体正答率</p>
+          <p id="statAvgAccuracy" class="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">0%</p>
+        </div>
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">★ピン留め（勘で正解）</p>
+          <p id="statStarredCards" class="text-2xl font-extrabold text-amber-500 mt-1">0問</p>
+        </div>
+        <div class="col-span-2 sm:col-span-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">今日のSRS復習予定</p>
+          <p id="statSrsDueCards" class="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">0問</p>
+        </div>
+      </div>
+
+      <!-- カテゴリ別達成度 -->
+      <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h3 class="font-bold text-sm sm:text-base flex items-center gap-2">
+            <i class="fa-solid fa-folder-tree text-indigo-500"></i> カテゴリ別正答率
+          </h3>
+          <button id="btnResetDeckStats" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition">
+            <i class="fa-solid fa-trash-can mr-1"></i>学習履歴をリセット
+          </button>
+        </div>
+        <div id="categoryStatsList" class="space-y-3 pt-1"></div>
+      </div>
+
+      <!-- 問題別成績・苦手リスト -->
+      <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h3 class="font-bold text-sm sm:text-base flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-rose-500"></i> 問題別成績・★ピン留め管理
+          </h3>
+          <button id="btnStartWeaknessFromStats" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition">
+            <i class="fa-solid fa-fire mr-1"></i>苦手・★問題を今すぐ特訓
+          </button>
+        </div>
+        <div id="weaknessRankingList" class="divide-y divide-slate-100 dark:divide-slate-800"></div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB 4: 問題追加・直接編集・画像添付・QR/URL共有・管理        -->
+    <!-- ============================================================ -->
+    <section id="tab-manage" class="hidden space-y-5">
+      <!-- デッキ操作＆共有・バックアップバー -->
+      <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="font-extrabold text-base sm:text-lg" id="manageDeckTitle">デッキ管理</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400" id="manageDeckDesc">問題の追加・編集・画像添付・AIインポート・QR共有が行えます</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnRenameDeck" class="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+              <i class="fa-solid fa-pen mr-1"></i>デッキ名変更
+            </button>
+            <button id="btnDeleteDeck" class="px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition">
+              <i class="fa-solid fa-trash mr-1"></i>デッキ削除
+            </button>
+          </div>
+        </div>
+
+        <!-- 機能ボタン群（4列） -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <button id="btnOpenBulkImport" class="p-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>AI・テキスト一括追加</span>
+          </button>
+          <button id="btnOpenQrShare" class="p-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-qrcode"></i>
+            <span>QR・URLでデッキ共有</span>
+          </button>
+          <button id="btnExportJson" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-file-export text-emerald-600 dark:text-emerald-400"></i>
+            <span>JSONバックアップ保存</span>
+          </button>
+          <label class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+            <i class="fa-solid fa-file-import text-amber-600 dark:text-amber-400"></i>
+            <span>JSON読み込み</span>
+            <input type="file" id="inputImportJson" accept=".json" class="hidden" />
+          </label>
+        </div>
+      </div>
+
+      <!-- GUI問題エディタ（数式ライブプレビュー＆画像添付対応） -->
+      <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h3 id="editorFormTitle" class="font-bold text-sm sm:text-base flex items-center gap-2">
+            <i class="fa-solid fa-circle-plus text-indigo-500"></i> 新しい問題を追加する
+          </h3>
+          <button id="btnCancelEdit" class="hidden text-xs font-bold text-rose-500 hover:text-rose-600">
+            <i class="fa-solid fa-xmark mr-1"></i>編集をキャンセル
+          </button>
+        </div>
+
+        <!-- iPad向け数式・赤シートクイック挿入バー -->
+        <div class="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700/70">
+          <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 mr-1">クイック挿入:</span>
+          <button type="button" data-insert="【】" class="insert-snippet-btn px-2 py-1 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30 text-xs font-bold hover:bg-rose-500/25 transition">【赤シート】</button>
+          <button type="button" data-insert="$$" class="insert-snippet-btn px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold hover:border-indigo-500 transition">$数式$</button>
+          <button type="button" data-insert="$$$$" class="insert-snippet-btn px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold hover:border-indigo-500 transition">$$中央数式$$</button>
+          <button type="button" data-insert="\frac{}{}" class="insert-snippet-btn px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono hover:border-indigo-500 transition">\frac{a}{b}</button>
+          <button type="button" data-insert="\sqrt{}" class="insert-snippet-btn px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono hover:border-indigo-500 transition">\sqrt{x}</button>
+          <button type="button" data-insert="^{}" class="insert-snippet-btn px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono hover:border-indigo-500 transition">x^{2}</button>
+          <button type="button" data-insert="_{}" class="insert-snippet-btn px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono hover:border-indigo-500 transition">a_{n}</button>
+        </div>
+
+        <form id="cardEditorForm" class="space-y-4">
+          <input type="hidden" id="editCardId" value="" />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold mb-1">表面（問題文） <span class="text-rose-500">*</span></label>
+              <textarea id="inputCardFront" rows="3" required placeholder="例：2次方程式 $ax^2 + bx + c = 0 \ (a \neq 0)$ の解の公式は？"
+                class="w-full rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">
+                裏面（答え・解説） <span class="text-rose-500">*</span>
+                <span class="font-normal text-[11px] text-rose-500 ml-1">※【 】で赤シート・4択・入力対象化</span>
+              </label>
+              <textarea id="inputCardBack" rows="3" required placeholder="例：【$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$】&#10;判別式は $D = b^2 - 4ac$ です。"
+                class="w-full rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-bold mb-1">ヒント（任意）</label>
+              <input type="text" id="inputCardHint" placeholder="例：平方完成から導く"
+                class="w-full rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">カテゴリ（任意・4択の選択肢グループ）</label>
+              <input type="text" id="inputCardCategory" placeholder="例：数学I・2次方程式"
+                class="w-full rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">画像添付（地図・回路図・グラフ等）</label>
+              <div class="flex items-center gap-2">
+                <label class="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-center cursor-pointer transition truncate">
+                  <i class="fa-regular fa-image mr-1 text-indigo-500"></i>画像を選択 / ペースト
+                  <input type="file" id="inputCardImageFile" accept="image/*" class="hidden" />
+                </label>
+                <button type="button" id="btnRemoveCardImage" class="hidden px-2.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 text-xs font-bold">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 添付画像プレビュー -->
+          <div id="editorImagePreviewWrap" class="hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-center">
+            <img id="editorImagePreview" src="" alt="添付プレビュー" class="max-h-36 mx-auto rounded-lg object-contain" />
+          </div>
+
+          <!-- リアルタイム数式＆赤シート ライブプレビュー -->
+          <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-indigo-200/80 dark:border-indigo-900/60 space-y-2.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-eye"></i> リアルタイム数式＆赤シート プレビュー
+              </span>
+              <button type="button" id="btnTogglePreviewRedSheet" class="px-2.5 py-1 rounded-lg text-xs font-bold border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 transition">
+                <span id="previewRedSheetLabel">プレビュー赤シート: OFF</span>
+              </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">表面プレビュー</p>
+                <div id="livePreviewFront" class="text-sm font-bold text-slate-800 dark:text-slate-100 whitespace-pre-line min-h-[2rem]"></div>
+              </div>
+              <div id="livePreviewBackWrapper" class="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">裏面プレビュー</p>
+                <div id="livePreviewBack" class="text-sm font-bold text-slate-800 dark:text-slate-100 whitespace-pre-line min-h-[2rem]"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="submit" id="btnSubmitCard" class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm transition">
+              <i class="fa-solid fa-plus mr-1.5"></i>問題をデッキに追加
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- 登録済みカード一覧 -->
+      <div class="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-bold text-sm sm:text-base">
+            登録問題一覧（<span id="manageCardCount">0</span>問）
+          </h3>
+          <div class="relative w-full sm:w-64">
+            <i class="fa-solid fa-magnifying-glass text-xs text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="manageSearchInput" placeholder="問題・答え・カテゴリを検索..."
+              class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+        <div id="manageCardList" class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== モーダル1：AI連携・テキスト一括追加 ==================== -->
+  <div id="modalBulkImport" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="font-extrabold text-base sm:text-lg flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> AI連携・テキスト一括追加
+        </h3>
+        <button id="btnCloseBulkModal" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm">
+        <div class="p-3.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-bold text-indigo-900 dark:text-indigo-200 text-xs">
+              <i class="fa-solid fa-robot mr-1"></i>数式・赤シート・4択・入力すべて対応！AI用指示文
+            </span>
+            <button id="btnCopyAiPrompt" class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shrink-0">
+              <i class="fa-regular fa-copy mr-1"></i>指示文をコピー
+            </button>
+          </div>
+          <pre id="aiPromptTemplate" class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 text-[11px] font-mono overflow-x-auto text-slate-700 dark:text-slate-300 select-all">この内容からテスト対策用の単語カードを作成してください。
+赤シート機能・4択・入力テストで使えるよう、重要な語句や公式は【 】で囲んでください。
+数学・物理・化学の数式や記号はLaTeX形式（インラインは $...$ 、独立した大きな式は $$...$$ ）で記述してください。
+出力は以下の形式で、1行につき1問のコードブロックのみを出力してください（前後の挨拶や改行は不要）。
+
+カテゴリ名 | 問題文（表面） | 【重要語句や数式】と解説（裏面） | ヒント</pre>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-bold text-xs">一括登録データ貼り付け（`|` 区切り / タブ区切り / JSON対応）</label>
+            <span id="bulkParseCount" class="text-xs font-bold text-emerald-600 dark:text-emerald-400">認識: 0問</span>
+          </div>
+          <textarea id="bulkImportTextarea" rows="5" placeholder="1行に1問ずつ貼り付けてください：&#10;数学I | 2次方程式 $ax^2+bx+c=0$ の解の公式は？ | 【$$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$】 | 平方完成から導く"
+            class="w-full rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <div id="bulkPreviewContainer" class="hidden space-y-1.5">
+          <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">読み込みプレビュー（先頭3問）:</p>
+          <div id="bulkPreviewList" class="space-y-1.5 max-h-36 overflow-y-auto"></div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+          <label class="flex items-center gap-2 cursor-pointer font-semibold text-xs">
+            <input type="radio" name="bulkTarget" value="current" checked class="accent-indigo-600" />
+            <span>現在選択中のデッキに追加</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer font-semibold text-xs">
+            <input type="radio" name="bulkTarget" value="new" class="accent-indigo-600" />
+            <span>新しいデッキを作成して追加</span>
+          </label>
+          <input type="text" id="bulkNewDeckName" placeholder="新規デッキ名"
+            class="hidden flex-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-xs" />
+        </div>
+      </div>
+
+      <div class="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button id="btnCancelBulkModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          キャンセル
+        </button>
+        <button id="btnExecuteBulkImport" class="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+          <i class="fa-solid fa-check mr-1"></i>一括追加を実行
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== モーダル2：QRコード・URLデッキ共有 ==================== -->
+  <div id="modalQrShare" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-extrabold text-base flex items-center gap-2">
+          <i class="fa-solid fa-qrcode text-violet-500"></i> サーバー不要 QR・URL共有
+        </h3>
+        <button id="btnCloseQrModal" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+        現在のデッキの問題データを圧縮して1本のURLとQRコードに変換します。友達のiPadやスマホで読み込むと、そのままデッキを取り込めます（※添付画像は容量節約のため除外されます）。
+      </p>
+
+      <div id="qrCodeCanvasBox" class="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-center min-h-[190px]"></div>
+      <p id="qrWarningText" class="hidden text-[11px] text-amber-600 dark:text-amber-400 font-semibold text-center"></p>
+
+      <div class="flex gap-2">
+        <input type="text" id="shareUrlInput" readonly class="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-mono" />
+        <button id="btnCopyShareUrl" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shrink-0">
+          <i class="fa-regular fa-copy mr-1"></i>URLコピー
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== カスタムダイアログ（alert/confirm代替） ==================== -->
+  <div id="customDialog" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+      <h3 id="dialogTitle" class="font-extrabold text-base">確認</h3>
+      <p id="dialogMessage" class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line"></p>
+      <div id="dialogInputWrap" class="hidden">
+        <input type="text" id="dialogInput" class="w-full rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      </div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button id="dialogCancelBtn" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">
+          キャンセル
+        </button>
+        <button id="dialogConfirmBtn" class="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition">
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト通知コンテナ -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col items-end gap-2 pointer-events-none"></div>
+
+  <!-- ==================== アプリケーションロジック ==================== -->
+  <script>
+    /**
+     * 初回起動用サンプルデータ（既存データがlocalStorageに無い場合のみ使用）
+     */
+    const SAMPLE_MATH_SCIENCE_CARDS = [
+      {
+        category: "数学（2次方程式）",
+        front: "2次方程式 $ax^2 + bx + c = 0 \\ (a \\neq 0)$ の解の公式は？",
+        back: "2次方程式の解の公式は 【$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$】 であり、根号の中身 $D = b^2 - 4ac$ を 【判別式】 と呼びます。",
+        hint: "両辺を $a$ で割って平方完成を行うと導けます。"
+      },
+      {
+        category: "物理（電磁気）",
+        front: "真空中の2つの点電荷 $q_1, q_2$ が距離 $r$ だけ離れているときの静電気力の大きさ $F$ を表す法則は？",
+        back: "クーロンの法則：【$$F = k\\frac{|q_1 q_2|}{r^2}$$】\n比例定数は $k \\approx 9.0 \\times 10^9\\ \\text{N}\\cdot\\text{m}^2/\\text{C}^2$ です。",
+        hint: "力の大きさは電荷の積に比例し、距離の2乗に反比例します。"
+      },
+      {
+        category: "化学（気体の性質）",
+        front: "物質量 $n$、圧力 $P$、体積 $V$、絶対温度 $T$ の間に成り立つ理想気体の状態方程式は？",
+        back: "理想気体の状態方程式：【$$PV = nRT$$】\n標準状態では気体 $1\\ \\text{mol}$ の体積は約 【$22.4\\ \\text{L}$】 になります。",
+        hint: "ボイル・シャルルの法則を物質量 $n$ に拡張した式です。"
+      }
+    ];
+
+    const STORAGE_KEY = 'studyloop_pro_v2';
+    const UNDO_STORAGE_KEY = 'studyloop_pro_v2_undo';
+    const TRASH_BACKUP_KEY = 'studyloop_pro_v2_trash';
+    const MAX_UNDO_STEPS = 30;
+
+    function generateId(prefix = 'id') {
+      return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function deepClone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
+    /**
+     * 赤シート（【...】）＋ KaTeX数式 統合レンダリング
+     */
+    function renderRichMathContent(containerEl, rawText) {
+      if (!containerEl) return;
+      const escaped = escapeHtml(rawText || '');
+      const withMasks = escaped.replace(/【([^】]+)】/g, (_, inner) => {
+        return `<span class="red-mask" tabindex="0" role="button" aria-label="赤シート項目">${inner}</span>`;
+      });
+      containerEl.innerHTML = withMasks;
+      applyKaTeXToElement(containerEl);
+    }
+
+    function applyKaTeXToElement(el) {
+      if (!el) return;
+      if (typeof window.renderMathInElement === 'function') {
+        try {
+          window.renderMathInElement(el, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '\\[', right: '\\]', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false,
+            strict: false
+          });
+        } catch (err) {
+          console.warn('KaTeX render warning:', err);
+        }
+      } else {
+        setTimeout(() => {
+          if (typeof window.renderMathInElement === 'function') {
+            applyKaTeXToElement(el);
+          }
+        }, 250);
+      }
+    }
+
+    /**
+     * 【...】内のターゲット語句配列を抽出（4択・入力・逆向き出題用）
+     */
+    function extractBracketTargets(text) {
+      if (!text) return [];
+      const matches = [];
+      const regex = /【([^】]+)】/g;
+      let m;
+      while ((m = regex.exec(text)) !== null) {
+        if (m[1] && m[1].trim()) {
+          matches.push(m[1].trim());
+        }
+      }
+      return matches;
+    }
+
+    function stripBrackets(text) {
+      return String(text || '').replace(/【([^】]+)】/g, '$1');
+    }
+
+    /**
+     * 赤文字入力判定用の表記ゆれ正規化関数
+     * （全角→半角、空白除去、$記号除去、大文字小文字統一、演算記号統一）
+     */
+    function normalizeAnswerString(str) {
+      if (!str) return '';
+      let s = String(str)
+        .replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+        .replace(/　/g, ' ')
+        .replace(/\$/g, '')
+        .replace(/\\text\{([^}]*)\}/g, '$1')
+        .replace(/\\mathrm\{([^}]*)\}/g, '$1')
+        .replace(/×/g, '*')
+        .replace(/÷/g, '/')
+        .replace(/−/g, '-')
+        .replace(/＝/g, '=')
+        .replace(/\s+/g, '')
+        .toLowerCase();
+      return s;
+    }
+
+    /**
+     * トースト通知（Undo時には呼ばない：無音Undoポリシー厳守）
+     */
+    function showToast(message, type = 'info', actionOptions = null) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colors = {
+        info: 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900',
+        success: 'bg-emerald-600 text-white',
+        warning: 'bg-amber-600 text-white',
+        error: 'bg-rose-600 text-white'
+      };
+      const icons = {
+        info: 'fa-circle-info',
+        success: 'fa-circle-check',
+        warning: 'fa-triangle-exclamation',
+        error: 'fa-circle-xmark'
+      };
+
+      const duration = actionOptions ? 8000 : 2600;
+      toast.className = `${colors[type] || colors.info} relative overflow-hidden px-4 py-3 rounded-2xl shadow-xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 pointer-events-auto transform transition-all duration-300 translate-y-2 opacity-0 max-w-md w-full sm:w-auto`;
+
+      const leftDiv = document.createElement('div');
+      leftDiv.className = 'flex items-center gap-2 min-w-0';
+      leftDiv.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} shrink-0"></i><span class="leading-snug">${escapeHtml(message)}</span>`;
+      toast.appendChild(leftDiv);
+
+      if (actionOptions && typeof actionOptions.onAction === 'function') {
+        const actionBtn = document.createElement('button');
+        actionBtn.type = 'button';
+        actionBtn.className = 'shrink-0 px-3 py-1.5 rounded-xl bg-white text-slate-900 hover:bg-amber-100 font-extrabold text-xs shadow-sm transition active:scale-95';
+        actionBtn.innerHTML = `<i class="fa-solid fa-rotate-left mr-1"></i>${escapeHtml(actionOptions.label || '元に戻す')}`;
+        actionBtn.onclick = () => {
+          actionOptions.onAction();
+          toast.remove();
+        };
+        toast.appendChild(actionBtn);
+
+        const timerBar = document.createElement('div');
+        timerBar.className = 'undo-timer-bar absolute bottom-0 left-0 h-1 bg-white/70';
+        toast.appendChild(timerBar);
+      }
+
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+
+      setTimeout(() => {
+        if (!toast.parentNode) return;
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    function showCustomDialog({ title, message, showInput = false, inputType = 'text', defaultValue = '', confirmText = 'OK', confirmDanger = false, showCancel = true }) {
+      return new Promise((resolve) => {
+        const dialog = document.getElementById('customDialog');
+        const titleEl = document.getElementById('dialogTitle');
+        const msgEl = document.getElementById('dialogMessage');
+        const inputWrap = document.getElementById('dialogInputWrap');
+        const inputEl = document.getElementById('dialogInput');
+        const cancelBtn = document.getElementById('dialogCancelBtn');
+        const confirmBtn = document.getElementById('dialogConfirmBtn');
+
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+
+        if (showInput) {
+          inputWrap.classList.remove('hidden');
+          inputEl.type = inputType;
+          inputEl.value = defaultValue;
+        } else {
+          inputWrap.classList.add('hidden');
+        }
+
+        cancelBtn.classList.toggle('hidden', !showCancel);
+        confirmBtn.textContent = confirmText;
+        confirmBtn.className = confirmDanger
+          ? 'px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition'
+          : 'px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition';
+
+        dialog.classList.remove('hidden');
+        if (showInput) setTimeout(() => inputEl.focus(), 50);
+
+        const cleanup = () => {
+          dialog.classList.add('hidden');
+          confirmBtn.onclick = null;
+          cancelBtn.onclick = null;
+          inputEl.onkeydown = null;
+        };
+
+        confirmBtn.onclick = () => {
+          const val = showInput ? inputEl.value.trim() : true;
+          cleanup();
+          resolve(val);
+        };
+
+        cancelBtn.onclick = () => {
+          cleanup();
+          resolve(null);
+        };
+
+        inputEl.onkeydown = (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmBtn.click();
+          }
+        };
+      });
+    }
+
+    /**
+     * =========================================================================
+     * アプリケーション状態管理 & 無音Undoスタック
+     * =========================================================================
+     */
+    let appData = {
+      theme: 'light',
+      currentDeckId: '',
+      decks: [],
+      blockSessions: {}
+    };
+
+    let studyState = {
+      progression: 'block5', // 'block5' | 'all' | 'weakness' | 'srs'
+      format: 'flip',        // 'flip' | 'choice4' | 'typing'
+      direction: 'normal',   // 'normal' | 'reverse'
+      order: 'seq',          // 'seq' | 'shuffle'
+      isFlipped: false,
+      redSheetMode: false,
+      previewRedSheetMode: false,
+      cramRedSheetMode: false,
+      queue: [],             // for 'all', 'weakness', 'srs'
+      queueIndex: 0,
+      queueTotal: 0,
+      srsIgnoreDue: false,
+      selectedCategory: 'ALL',
+      lastFocusedTextareaId: 'inputCardBack',
+      editorImageDataUrl: null,
+      // 4択・入力の現在カード回答状態
+      currentCardIdRendered: null,
+      choice4Answered: false,
+      typingAnswered: false,
+      typingLastRecord: null
+    };
+
+    let undoStack = [];
+
+    function updateUndoButtonUI() {
+      const btn = document.getElementById('btnUndoAnswer');
+      const badge = document.getElementById('undoStackBadge');
+      const completeUndoBtn = document.getElementById('btnCompleteUndoLast');
+      if (!btn || !badge) return;
+      const count = undoStack.length;
+      badge.textContent = count;
+      btn.disabled = count === 0;
+      if (completeUndoBtn) {
+        completeUndoBtn.classList.toggle('hidden', count === 0);
+      }
+    }
+
+    function persistUndoStack() {
+      try {
+        localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify(undoStack.slice(-10)));
+      } catch (e) {}
+    }
+
+    function loadUndoStack() {
+      try {
+        const raw = localStorage.getItem(UNDO_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) undoStack = parsed.slice(-MAX_UNDO_STEPS);
+        }
+      } catch (e) {
+        undoStack = [];
+      }
+    }
+
+    function pushStudyUndoSnapshot() {
+      undoStack.push({
+        timestamp: Date.now(),
+        currentDeckId: appData.currentDeckId,
+        decks: deepClone(appData.decks),
+        blockSessions: deepClone(appData.blockSessions),
+        studySnap: {
+          progression: studyState.progression,
+          format: studyState.format,
+          direction: studyState.direction,
+          order: studyState.order,
+          queue: [...studyState.queue],
+          queueIndex: studyState.queueIndex,
+          queueTotal: studyState.queueTotal,
+          srsIgnoreDue: studyState.srsIgnoreDue,
+          selectedCategory: studyState.selectedCategory
+        }
+      });
+      if (undoStack.length > MAX_UNDO_STEPS) undoStack.shift();
+      persistUndoStack();
+      updateUndoButtonUI();
+    }
+
+    /**
+     * 無音「↩ 1つ戻る (Z)」実行：一切トースト・報告を出さず即座に巻き戻す
+     */
+    function handleUndoLastAnswer() {
+      if (undoStack.length === 0) return;
+      const prev = undoStack.pop();
+      appData.decks = prev.decks;
+      appData.blockSessions = prev.blockSessions;
+      if (prev.currentDeckId && appData.decks.some(d => d.id === prev.currentDeckId)) {
+        appData.currentDeckId = prev.currentDeckId;
+      }
+      if (prev.studySnap) {
+        studyState.progression = prev.studySnap.progression;
+        studyState.format = prev.studySnap.format;
+        studyState.direction = prev.studySnap.direction;
+        studyState.order = prev.studySnap.order;
+        studyState.queue = [...prev.studySnap.queue];
+        studyState.queueIndex = prev.studySnap.queueIndex;
+        studyState.queueTotal = prev.studySnap.queueTotal;
+        studyState.srsIgnoreDue = prev.studySnap.srsIgnoreDue;
+        studyState.selectedCategory = prev.studySnap.selectedCategory;
+      }
+      studyState.isFlipped = false;
+      studyState.currentCardIdRendered = null;
+      studyState.choice4Answered = false;
+      studyState.typingAnswered = false;
+
+      saveAppData();
+      persistUndoStack();
+      renderAllViews();
+      updateUndoButtonUI();
+      // ※要望通り「戻しました！」等の報告メッセージは一切出さない
+    }
+
+    function saveTrashBackupAndNotify(message) {
+      const backupSnapshot = deepClone(appData);
+      try {
+        localStorage.setItem(TRASH_BACKUP_KEY, JSON.stringify({ savedAt: Date.now(), data: backupSnapshot }));
+      } catch (e) {}
+
+      showToast(message, 'warning', {
+        label: '元に戻す',
+        onAction: () => {
+          appData = deepClone(backupSnapshot);
+          saveAppData();
+          if (studyState.progression !== 'block5') {
+            buildProgressionQueue(getCurrentDeck());
+          }
+          renderAllViews();
+          showToast('復元しました', 'success');
+        }
+      });
+    }
+
+    /**
+     * =========================================================================
+     * データ永続化 & 既存 studyloop* キーからの自動引き継ぎ
+     * =========================================================================
+     */
+    function normalizeDeckObject(rawDeck) {
+      return {
+        id: rawDeck.id || generateId('deck'),
+        title: rawDeck.title || '復元されたデッキ',
+        description: rawDeck.description || '',
+        examDate: rawDeck.examDate || null,
+        createdAt: rawDeck.createdAt || Date.now(),
+        cards: Array.isArray(rawDeck.cards) ? rawDeck.cards.map((c, idx) => ({
+          id: c.id || generateId(`card_${idx}`),
+          front: String(c.front || ''),
+          back: String(c.back || ''),
+          hint: String(c.hint || ''),
+          category: String(c.category || '一般'),
+          image: c.image || null,
+          starred: Boolean(c.starred),
+          stats: {
+            attempts: Number(c.stats?.attempts || 0),
+            correct: Number(c.stats?.correct || 0),
+            wrong: Number(c.stats?.wrong || 0),
+            streak: Number(c.stats?.streak || 0),
+            lastStudied: c.stats?.lastStudied || null
+          },
+          srs: {
+            interval: Number(c.srs?.interval || 0),
+            ease: Number(c.srs?.ease || 2.5),
+            due: Number(c.srs?.due || 0)
+          }
+        })) : []
+      };
+    }
+
+    function createInitialData() {
+      const deckId = 'deck_sample_math_science';
+      const cards = SAMPLE_MATH_SCIENCE_CARDS.map((item, idx) => ({
+        id: `sample_card_${idx + 1}`,
+        front: item.front,
+        back: item.back,
+        hint: item.hint || '',
+        category: item.category || '一般',
+        image: null,
+        starred: false,
+        stats: { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null },
+        srs: { interval: 0, ease: 2.5, due: 0 }
+      }));
+
+      return {
+        theme: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+        currentDeckId: deckId,
+        decks: [
+          {
+            id: deckId,
+            title: 'サンプル：数学・物理・化学',
+            description: '数式（LaTeX）・赤シート・ランダム4択・赤文字入力の動作確認用サンプル（3問）です。',
+            examDate: null,
+            createdAt: Date.now(),
+            cards
+          }
+        ],
+        blockSessions: {}
+      };
+    }
+
+    function loadAppData() {
+      // 1. まず現行バージョンの保存領域を確認
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.decks) && parsed.decks.length > 0) {
+            appData = {
+              theme: parsed.theme || 'light',
+              currentDeckId: parsed.currentDeckId || parsed.decks[0].id,
+              decks: parsed.decks.map(normalizeDeckObject),
+              blockSessions: parsed.blockSessions || {}
+            };
+            if (!appData.decks.some(d => d.id === appData.currentDeckId)) {
+              appData.currentDeckId = appData.decks[0].id;
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Load error:', e);
+      }
+
+      // 2. 新キーが無ければ、過去バージョンの studyloop* キーを全スキャンして自動引き継ぎ
+      try {
+        const migratedDecks = [];
+        const seenDeckIds = new Set();
+        let migratedSessions = {};
+        let detectedTheme = null;
+        let preferredDeckId = null;
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.toLowerCase().startsWith('studyloop')) continue;
+          if (key === STORAGE_KEY || key.endsWith('_undo') || key.endsWith('_trash')) continue;
+
+          try {
+            const legacyRaw = localStorage.getItem(key);
+            if (!legacyRaw) continue;
+            const legacyParsed = JSON.parse(legacyRaw);
+            if (legacyParsed && Array.isArray(legacyParsed.decks) && legacyParsed.decks.length > 0) {
+              if (!detectedTheme && legacyParsed.theme) detectedTheme = legacyParsed.theme;
+              if (!preferredDeckId && legacyParsed.currentDeckId) preferredDeckId = legacyParsed.currentDeckId;
+              if (legacyParsed.blockSessions && typeof legacyParsed.blockSessions === 'object') {
+                migratedSessions = { ...migratedSessions, ...legacyParsed.blockSessions };
+              }
+              legacyParsed.decks.forEach(d => {
+                const norm = normalizeDeckObject(d);
+                if (!seenDeckIds.has(norm.id)) {
+                  seenDeckIds.add(norm.id);
+                  migratedDecks.push(norm);
+                }
+              });
+            }
+          } catch (innerErr) {}
+        }
+
+        if (migratedDecks.length > 0) {
+          appData = {
+            theme: detectedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+            currentDeckId: migratedDecks.some(d => d.id === preferredDeckId) ? preferredDeckId : migratedDecks[0].id,
+            decks: migratedDecks,
+            blockSessions: migratedSessions
+          };
+          saveAppData();
+          return;
+        }
+      } catch (scanErr) {}
+
+      // 3. 既存データが一切無ければクリーンな3問サンプルを初期化
+      appData = createInitialData();
+      saveAppData();
+    }
+
+    function saveAppData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      } catch (e) {
+        showToast('ブラウザの保存容量がいっぱいです。不要な画像を削除するかJSON保存してください。', 'error');
+      }
+    }
+
+    function getCurrentDeck() {
+      return appData.decks.find(d => d.id === appData.currentDeckId) || appData.decks[0];
+    }
+
+    function applyTheme() {
+      const htmlEl = document.documentElement;
+      const iconEl = document.getElementById('themeIcon');
+      if (appData.theme === 'dark') {
+        htmlEl.classList.add('dark');
+        htmlEl.classList.remove('light');
+        iconEl.className = 'fa-solid fa-sun text-amber-400';
+      } else {
+        htmlEl.classList.remove('dark');
+        htmlEl.classList.add('light');
+        iconEl.className = 'fa-solid fa-moon';
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 進行ルール（5問1セット / 通常全問 / 苦手★特訓 / 忘却曲線SRS）
+     * =========================================================================
+     */
+    function shuffleArray(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function initOrRepairBlockSession(deck, forceReset = false) {
+      const existing = appData.blockSessions[deck.id];
+      const validIds = new Set(deck.cards.map(c => c.id));
+
+      if (!forceReset && existing && Array.isArray(existing.allCardIds)) {
+        const filteredAll = existing.allCardIds.filter(id => validIds.has(id));
+        const existingSet = new Set(filteredAll);
+        const newlyAdded = deck.cards.filter(c => !existingSet.has(c.id)).map(c => c.id);
+
+        if (filteredAll.length > 0) {
+          existing.allCardIds = [...filteredAll, ...newlyAdded];
+          existing.queue = (existing.queue || []).filter(id => validIds.has(id));
+          existing.currentBlockWrong = (existing.currentBlockWrong || []).filter(id => validIds.has(id));
+          existing.carryOverToNext = (existing.carryOverToNext || []).filter(id => validIds.has(id));
+          existing.incomingCarryOver = (existing.incomingCarryOver || []).filter(id => validIds.has(id));
+
+          if (existing.phase === 'completed' && newlyAdded.length > 0) {
+            const nextBlockIdx = Math.floor(filteredAll.length / 5);
+            existing.currentBlockIndex = nextBlockIdx;
+            existing.phase = 'learning';
+            existing.queue = existing.allCardIds.slice(nextBlockIdx * 5, (nextBlockIdx + 1) * 5);
+            existing.currentBlockLearnTotal = existing.queue.length;
+          }
+          appData.blockSessions[deck.id] = existing;
+          saveAppData();
+          return existing;
+        }
+      }
+
+      let allCardIds = deck.cards.map(c => c.id);
+      if (studyState.order === 'shuffle') {
+        allCardIds = shuffleArray(allCardIds);
+      }
+      const firstBlock = allCardIds.slice(0, 5);
+      const session = {
+        deckId: deck.id,
+        allCardIds,
+        blockSize: 5,
+        currentBlockIndex: 0,
+        phase: allCardIds.length === 0 ? 'completed' : 'learning',
+        queue: firstBlock,
+        currentBlockLearnTotal: firstBlock.length,
+        currentReviewTotal: firstBlock.length,
+        currentBlockWrong: [],
+        carryOverToNext: [],
+        incomingCarryOver: []
+      };
+
+      appData.blockSessions[deck.id] = session;
+      saveAppData();
+      return session;
+    }
+
+    function advanceBlockSession(deck, isCorrect) {
+      const session = initOrRepairBlockSession(deck, false);
+      if (session.phase === 'completed' || session.queue.length === 0) return;
+
+      const currentCardId = session.queue.shift();
+
+      if (session.phase === 'learning') {
+        if (!isCorrect && !session.currentBlockWrong.includes(currentCardId)) {
+          session.currentBlockWrong.push(currentCardId);
+        }
+
+        if (session.queue.length === 0) {
+          const combinedReview = [];
+          const seen = new Set();
+          [...session.incomingCarryOver, ...session.currentBlockWrong].forEach(id => {
+            if (!seen.has(id)) {
+              seen.add(id);
+              combinedReview.push(id);
+            }
+          });
+          session.incomingCarryOver = [];
+          session.currentBlockWrong = [];
+
+          if (combinedReview.length > 0) {
+            session.phase = 'review';
+            session.queue = combinedReview;
+            session.currentReviewTotal = combinedReview.length;
+          } else {
+            moveToNextBlockOrFinish(session);
+          }
+        }
+      } else if (session.phase === 'review') {
+        if (!isCorrect && !session.carryOverToNext.includes(currentCardId)) {
+          session.carryOverToNext.push(currentCardId);
+        }
+        if (session.queue.length === 0) {
+          moveToNextBlockOrFinish(session);
+        }
+      } else if (session.phase === 'final_review') {
+        if (!isCorrect) {
+          session.queue.push(currentCardId);
+        }
+        if (session.queue.length === 0) {
+          session.phase = 'completed';
+        }
+      }
+
+      appData.blockSessions[deck.id] = session;
+      saveAppData();
+    }
+
+    function moveToNextBlockOrFinish(session) {
+      const nextBlockIndex = session.currentBlockIndex + 1;
+      const totalBlocks = Math.ceil(session.allCardIds.length / session.blockSize);
+
+      if (nextBlockIndex < totalBlocks) {
+        session.currentBlockIndex = nextBlockIndex;
+        session.phase = 'learning';
+        const nextSlice = session.allCardIds.slice(
+          nextBlockIndex * session.blockSize,
+          (nextBlockIndex + 1) * session.blockSize
+        );
+        session.queue = nextSlice;
+        session.currentBlockLearnTotal = nextSlice.length;
+        session.incomingCarryOver = [...session.carryOverToNext];
+        session.carryOverToNext = [];
+      } else if (session.carryOverToNext.length > 0) {
+        session.phase = 'final_review';
+        session.queue = [...session.carryOverToNext];
+        session.currentReviewTotal = session.queue.length;
+        session.carryOverToNext = [];
+      } else {
+        session.phase = 'completed';
+        session.queue = [];
+      }
+    }
+
+    function buildProgressionQueue(deck) {
+      studyState.isFlipped = false;
+      studyState.currentCardIdRendered = null;
+      studyState.choice4Answered = false;
+      studyState.typingAnswered = false;
+
+      if (studyState.progression === 'block5') {
+        initOrRepairBlockSession(deck, false);
+        return;
+      }
+
+      let candidates = [...deck.cards];
+
+      if (studyState.progression === 'weakness') {
+        candidates = candidates.filter(c => {
+          if (c.starred) return true;
+          if (c.stats.attempts === 0) return false;
+          const acc = c.stats.correct / c.stats.attempts;
+          return c.stats.wrong > 0 && (acc < 0.7 || c.stats.streak < 2);
+        });
+        if (studyState.order === 'seq') {
+          candidates.sort((a, b) => {
+            if (a.starred !== b.starred) return a.starred ? -1 : 1;
+            const accA = a.stats.attempts === 0 ? 1 : a.stats.correct / a.stats.attempts;
+            const accB = b.stats.attempts === 0 ? 1 : b.stats.correct / b.stats.attempts;
+            return accA - accB;
+          });
+        }
+      } else if (studyState.progression === 'srs') {
+        const now = Date.now();
+        if (!studyState.srsIgnoreDue) {
+          candidates = candidates.filter(c => !c.srs || !c.srs.due || c.srs.due <= now);
+        }
+        if (studyState.order === 'seq') {
+          candidates.sort((a, b) => (a.srs?.due || 0) - (b.srs?.due || 0));
+        }
+      } else if (studyState.progression === 'all') {
+        if (studyState.selectedCategory !== 'ALL') {
+          candidates = candidates.filter(c => c.category === studyState.selectedCategory);
+        }
+      }
+
+      let ids = candidates.map(c => c.id);
+      if (studyState.order === 'shuffle') {
+        ids = shuffleArray(ids);
+      }
+
+      studyState.queue = ids;
+      studyState.queueIndex = 0;
+      studyState.queueTotal = ids.length;
+    }
+
+    function getActiveCard(deck) {
+      if (!deck || deck.cards.length === 0) return null;
+      if (studyState.progression === 'block5') {
+        const session = initOrRepairBlockSession(deck, false);
+        if (session.phase === 'completed' || session.queue.length === 0) return null;
+        return deck.cards.find(c => c.id === session.queue[0]) || null;
+      } else {
+        if (studyState.queueIndex >= studyState.queue.length) return null;
+        return deck.cards.find(c => c.id === studyState.queue[studyState.queueIndex]) || null;
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 学習画面メイン描画（カードめくり / ランダム4択 / 赤文字入力）
+     * =========================================================================
+     */
+    function updateExamCountdownBadge(deck) {
+      const labelEl = document.getElementById('examCountdownText');
+      if (!deck.examDate) {
+        labelEl.textContent = '試験日を設定';
+        return;
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(deck.examDate + 'T00:00:00');
+      const diffDays = Math.ceil((target.getTime() - today.getTime()) / 86400000);
+      const unmastered = deck.cards.filter(c => c.stats.streak < 2).length;
+
+      if (diffDays < 0) {
+        labelEl.textContent = `試験終了 (${deck.examDate})`;
+      } else if (diffDays === 0) {
+        labelEl.textContent = `試験当日！残り${unmastered}問`;
+      } else {
+        const quota = Math.max(1, Math.ceil(unmastered / diffDays));
+        labelEl.textContent = `試験まであと${diffDays}日 ・ 1日${quota}枚ペース`;
+      }
+    }
+
+    function renderStudyView() {
+      const deck = getCurrentDeck();
+      updateUndoButtonUI();
+      updateExamCountdownBadge(deck);
+
+      // 進行ルールピル見た目更新
+      document.querySelectorAll('.prog-btn').forEach(btn => {
+        const active = btn.dataset.prog === studyState.progression;
+        btn.className = active
+          ? 'prog-btn px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm transition flex items-center justify-center gap-1.5'
+          : 'prog-btn px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:border-indigo-400 transition flex items-center justify-center gap-1.5';
+      });
+
+      // 出題形式ピル見た目更新
+      document.querySelectorAll('.format-btn').forEach(btn => {
+        const active = btn.dataset.format === studyState.format;
+        btn.className = active
+          ? 'format-btn px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 border-rose-500 bg-rose-500 text-white shadow-sm transition flex items-center justify-center gap-1.5'
+          : 'format-btn px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:border-rose-400 transition flex items-center justify-center gap-1.5';
+      });
+
+      // 向き・並び順ラベル更新
+      document.getElementById('directionLabel').textContent = studyState.direction === 'normal'
+        ? '通常 (問題→答え)'
+        : '逆向き (用語→説明)';
+      document.getElementById('orderLabel').textContent = studyState.order === 'seq' ? '登録順' : 'シャッフル';
+      document.getElementById('orderIcon').className = studyState.order === 'seq'
+        ? 'fa-solid fa-arrow-down-1-9 text-emerald-500'
+        : 'fa-solid fa-shuffle text-amber-500';
+
+      // カテゴリセレクト（通常・全問時のみ表示）
+      const catFilterEl = document.getElementById('studyCategoryFilter');
+      if (studyState.progression === 'all') {
+        catFilterEl.classList.remove('hidden');
+        const categories = ['ALL', ...new Set(deck.cards.map(c => c.category).filter(Boolean))];
+        catFilterEl.innerHTML = categories.map(cat => {
+          const label = cat === 'ALL' ? `全カテゴリ (${deck.cards.length}問)` : cat;
+          return `<option value="${escapeHtml(cat)}" ${cat === studyState.selectedCategory ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+        }).join('');
+      } else {
+        catFilterEl.classList.add('hidden');
+      }
+
+      // 赤シートボタンはカードめくり形式時のみ表示
+      document.getElementById('btnToggleRedSheet').classList.toggle('hidden', studyState.format !== 'flip');
+
+      // ステータスバッジ・進捗バー計算
+      const badgeEl = document.getElementById('modeStatusBadge');
+      const carryBadge = document.getElementById('blockCarryOverBadge');
+      carryBadge.classList.add('hidden');
+
+      if (studyState.progression === 'block5') {
+        const session = initOrRepairBlockSession(deck, false);
+        const totalBlocks = Math.max(1, Math.ceil(session.allCardIds.length / session.blockSize));
+        const currentSetNum = session.currentBlockIndex + 1;
+        const pendingCarry = session.phase === 'learning' ? session.incomingCarryOver.length : session.carryOverToNext.length;
+
+        if (pendingCarry > 0) {
+          carryBadge.classList.remove('hidden');
+          document.getElementById('carryOverCount').textContent = pendingCarry;
+        }
+
+        if (session.phase === 'learning') {
+          const idxInSet = session.currentBlockLearnTotal - session.queue.length + 1;
+          badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/70 dark:text-indigo-200';
+          badgeEl.innerHTML = `<i class="fa-solid fa-play-circle"></i> セット ${currentSetNum}/${totalBlocks} ・ 本編 (${idxInSet}/${session.currentBlockLearnTotal}問目)`;
+        } else if (session.phase === 'review') {
+          badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/70 dark:text-rose-200';
+          badgeEl.innerHTML = `<i class="fa-solid fa-rotate-left"></i> セット ${currentSetNum}/${totalBlocks} ・ 振り返り復習 (残り${session.queue.length}問)`;
+        } else if (session.phase === 'final_review') {
+          badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/70 dark:text-amber-200';
+          badgeEl.innerHTML = `<i class="fa-solid fa-fire"></i> 最終振り返りループ (残り${session.queue.length}問)`;
+        } else {
+          badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-200';
+          badgeEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> 全セット完了`;
+        }
+
+        const doneApprox = session.phase === 'completed'
+          ? session.allCardIds.length
+          : session.currentBlockIndex * session.blockSize;
+        const pct = Math.min(100, Math.round((doneApprox / Math.max(1, session.allCardIds.length)) * 100));
+        document.getElementById('progressLeftLabel').textContent = `セット ${currentSetNum} / ${totalBlocks} 進行中`;
+        document.getElementById('progressRightLabel').textContent = `完了目安 ${doneApprox} / ${session.allCardIds.length} 問`;
+        document.getElementById('studyProgressBar').style.width = `${pct}%`;
+      } else {
+        const modeNames = {
+          all: '通常・全問演習',
+          weakness: '苦手・★ピン留め特訓',
+          srs: studyState.srsIgnoreDue ? '忘却曲線 (前倒し全問)' : '忘却曲線 (今日の復習対象)'
+        };
+        badgeEl.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/70 dark:text-indigo-200';
+        badgeEl.innerHTML = `<i class="fa-solid fa-bolt"></i> ${modeNames[studyState.progression]} (全${studyState.queueTotal}問)`;
+
+        const currentNum = Math.min(studyState.queueIndex + 1, studyState.queueTotal);
+        const pct = studyState.queueTotal === 0 ? 100 : Math.round((studyState.queueIndex / studyState.queueTotal) * 100);
+        document.getElementById('progressLeftLabel').textContent = modeNames[studyState.progression];
+        document.getElementById('progressRightLabel').textContent = `${studyState.queueIndex >= studyState.queueTotal ? studyState.queueTotal : currentNum} / ${studyState.queueTotal} 問`;
+        document.getElementById('studyProgressBar').style.width = `${pct}%`;
+      }
+
+      const activeCard = getActiveCard(deck);
+      const stageEl = document.getElementById('activeStudyStage');
+      const completeEl = document.getElementById('studyCompleteView');
+
+      if (!activeCard) {
+        stageEl.classList.add('hidden');
+        completeEl.classList.remove('hidden');
+        const btnAllSrs = document.getElementById('btnCompletePracticeAllSrs');
+        btnAllSrs.classList.add('hidden');
+
+        if (deck.cards.length === 0) {
+          document.getElementById('completeTitle').textContent = 'デッキに問題がありません';
+          document.getElementById('completeMessage').textContent = '「問題追加・管理」タブから問題を追加してください。';
+        } else if (studyState.progression === 'weakness' && studyState.queueTotal === 0) {
+          document.getElementById('completeTitle').textContent = '苦手・★ピン留め問題はありません！';
+          document.getElementById('completeMessage').textContent = 'すべての問題が好成績です。素晴らしい仕上がりです！';
+        } else if (studyState.progression === 'srs' && studyState.queueTotal === 0) {
+          document.getElementById('completeTitle').textContent = '本日のSRS復習ノルマ完了！';
+          document.getElementById('completeMessage').textContent = '今復習すべきカードはすべて完了しています。前倒しで全問練習することもできます。';
+          btnAllSrs.classList.remove('hidden');
+        } else {
+          document.getElementById('completeTitle').textContent = 'セッション完全制覇おめでとうございます！';
+          document.getElementById('completeMessage').textContent = 'すべての問題をクリアしました！';
+        }
+        return;
+      }
+
+      stageEl.classList.remove('hidden');
+      completeEl.classList.add('hidden');
+
+      // 共通メタ情報（番号・カテゴリ・戦績・★ピン留め）
+      const cardIndexInDeck = deck.cards.findIndex(c => c.id === activeCard.id) + 1;
+      document.getElementById('cardNumberBadge').textContent = `#${cardIndexInDeck}`;
+      document.getElementById('cardCategoryBadge').textContent = activeCard.category || '一般';
+
+      const statsBadge = document.getElementById('cardStatsBadge');
+      const st = activeCard.stats;
+      if (st.attempts === 0) {
+        statsBadge.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400';
+        statsBadge.textContent = '未学習';
+      } else {
+        const acc = Math.round((st.correct / st.attempts) * 100);
+        if (st.streak >= 2) {
+          statsBadge.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300';
+          statsBadge.textContent = `習得済み (${acc}%)`;
+        } else {
+          statsBadge.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300';
+          statsBadge.textContent = `正答率 ${acc}% (${st.correct}/${st.attempts})`;
+        }
+      }
+
+      updateStarButtonUI(activeCard);
+
+      // 出題形式コンテナ切り替え
+      document.getElementById('formatFlipContainer').classList.toggle('hidden', studyState.format !== 'flip');
+      document.getElementById('formatChoice4Container').classList.toggle('hidden', studyState.format !== 'choice4');
+      document.getElementById('formatTypingContainer').classList.toggle('hidden', studyState.format !== 'typing');
+
+      if (studyState.format === 'flip') {
+        renderFlipFormat(activeCard);
+      } else if (studyState.format === 'choice4') {
+        renderChoice4Format(deck, activeCard);
+      } else if (studyState.format === 'typing') {
+        renderTypingFormat(activeCard);
+      }
+    }
+
+    function updateStarButtonUI(card) {
+      const btn = document.getElementById('btnToggleStar');
+      const icon = document.getElementById('starIcon');
+      const label = document.getElementById('starLabel');
+      if (card.starred) {
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/70 border-amber-400 text-amber-800 dark:text-amber-200 shadow-sm';
+        icon.className = 'fa-solid fa-star text-amber-500';
+        label.textContent = '★ピン留め中';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-400';
+        icon.className = 'fa-regular fa-star';
+        label.textContent = 'ピン留め';
+      }
+    }
+
+    /**
+     * 形式A：カードめくり描画（通常 / 逆向き対応 & SRS 3段階ボタン対応）
+     */
+    function renderFlipFormat(card) {
+      const isReverse = studyState.direction === 'reverse';
+      const frontBadge = document.getElementById('frontSideBadge');
+      const backBadge = document.getElementById('backSideBadge');
+      const frontTextEl = document.getElementById('cardFrontText');
+      const backTextEl = document.getElementById('cardBackText');
+      const revContextEl = document.getElementById('reverseContextBox');
+
+      // 画像表示
+      const imgWrap = document.getElementById('cardFrontImageWrap');
+      const imgEl = document.getElementById('cardFrontImage');
+      if (card.image && !isReverse) {
+        imgWrap.classList.remove('hidden');
+        imgEl.src = card.image;
+      } else {
+        imgWrap.classList.add('hidden');
+      }
+
+      if (!isReverse) {
+        frontBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span> QUESTION（表面・問題）`;
+        backBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> ANSWER（裏面・答えと解説）`;
+        renderRichMathContent(frontTextEl, card.front);
+        renderRichMathContent(backTextEl, card.back);
+        revContextEl.classList.add('hidden');
+      } else {
+        const targets = extractBracketTargets(card.back);
+        const promptTerm = targets.length > 0 ? targets.join(' ／ ') : stripBrackets(card.back);
+        frontBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-violet-500"></span> TERM（逆向き出題・この用語/公式の意味は？）`;
+        backBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> MEANING（裏面・説明文）`;
+        renderRichMathContent(frontTextEl, promptTerm);
+        renderRichMathContent(backTextEl, card.front);
+        revContextEl.classList.remove('hidden');
+        renderRichMathContent(revContextEl, '【解説文】\n' + card.back);
+      }
+
+      // ヒント制御
+      const hintBox = document.getElementById('cardHintBox');
+      const hintBtn = document.getElementById('btnShowHint');
+      hintBox.classList.add('hidden');
+      if (card.hint && card.hint.trim()) {
+        hintBtn.classList.remove('hidden');
+        renderRichMathContent(document.getElementById('cardHintText'), card.hint);
+      } else {
+        hintBtn.classList.add('hidden');
+      }
+
+      // SRSモード時は下部ボタンを3段階に切替
+      const isSrs = studyState.progression === 'srs';
+      document.getElementById('standardJudgeButtons').classList.toggle('hidden', isSrs);
+      document.getElementById('srsJudgeButtons').classList.toggle('hidden', !isSrs);
+
+      if (isSrs) {
+        const curInt = card.srs?.interval || 0;
+        const ease = card.srs?.ease || 2.5;
+        const goodDays = curInt === 0 ? 1 : Math.max(1, Math.round(curInt * ease));
+        const easyDays = curInt === 0 ? 3 : Math.max(2, Math.round(curInt * ease * 1.3));
+        document.getElementById('srsGoodIntervalLabel').textContent = `${goodDays}日後`;
+        document.getElementById('srsEasyIntervalLabel').textContent = `${easyDays}日後`;
+      }
+
+      document.getElementById('flashcardInner').classList.toggle('rotate-y-180', studyState.isFlipped);
+    }
+
+    /**
+     * 形式B：ランダム4択描画
+     */
+    function renderChoice4Format(deck, card) {
+      const renderKey = `${card.id}_${studyState.direction}_${studyState.progression}`;
+      if (studyState.currentCardIdRendered === renderKey && studyState.choice4Answered) {
+        return; // 回答結果表示中は再シャッフルしない
+      }
+      studyState.currentCardIdRendered = renderKey;
+      studyState.choice4Answered = false;
+
+      const isReverse = studyState.direction === 'reverse';
+      const qEl = document.getElementById('choice4QuestionText');
+      const hintBox = document.getElementById('choice4HintBox');
+      const hintBtn = document.getElementById('btnChoice4Hint');
+      const imgWrap = document.getElementById('choice4ImageWrap');
+      const imgEl = document.getElementById('choice4Image');
+
+      hintBox.classList.add('hidden');
+      if (card.hint && card.hint.trim()) {
+        hintBtn.classList.remove('hidden');
+        renderRichMathContent(hintBox, card.hint);
+      } else {
+        hintBtn.classList.add('hidden');
+      }
+
+      if (card.image && !isReverse) {
+        imgWrap.classList.remove('hidden');
+        imgEl.src = card.image;
+      } else {
+        imgWrap.classList.add('hidden');
+      }
+
+      // 正解テキストとダミー選択肢プール抽出
+      let correctAnswer = '';
+      if (!isReverse) {
+        renderRichMathContent(qEl, card.front);
+        const targets = extractBracketTargets(card.back);
+        correctAnswer = targets.length > 0 ? targets[0] : stripBrackets(card.back).split('\n')[0];
+      } else {
+        const targets = extractBracketTargets(card.back);
+        const promptTerm = targets.length > 0 ? targets.join(' ／ ') : stripBrackets(card.back);
+        renderRichMathContent(qEl, `「${promptTerm}」の説明として最も適切なものはどれ？`);
+        correctAnswer = stripBrackets(card.front);
+      }
+
+      const getCardChoiceText = (c) => {
+        if (!isReverse) {
+          const t = extractBracketTargets(c.back);
+          return t.length > 0 ? t[0] : stripBrackets(c.back).split('\n')[0];
+        } else {
+          return stripBrackets(c.front);
+        }
+      };
+
+      const distractorSet = new Set();
+      const normCorrect = normalizeAnswerString(correctAnswer);
+
+      // 1. 同じカテゴリの他カードからダミー抽出
+      const sameCatCards = shuffleArray(deck.cards.filter(c => c.id !== card.id && c.category === card.category));
+      for (const c of sameCatCards) {
+        const cand = getCardChoiceText(c);
+        if (cand && normalizeAnswerString(cand) !== normCorrect) {
+          distractorSet.add(cand);
+          if (distractorSet.size >= 3) break;
+        }
+      }
+
+      // 2. 足りなければ同デッキ内の他カテゴリから抽出
+      if (distractorSet.size < 3) {
+        const otherCatCards = shuffleArray(deck.cards.filter(c => c.id !== card.id && c.category !== card.category));
+        for (const c of otherCatCards) {
+          const cand = getCardChoiceText(c);
+          if (cand && normalizeAnswerString(cand) !== normCorrect) {
+            distractorSet.add(cand);
+            if (distractorSet.size >= 3) break;
+          }
+        }
+      }
+
+      // 3. それでも3つ未満（カード総数が少ないデッキ）の場合のフォールバック
+      const fallbackPool = ['該当なし（上のいずれでもない）', '上記のすべてが正しい', '条件不足のため定まらない'];
+      for (const fb of fallbackPool) {
+        if (distractorSet.size >= 3) break;
+        if (normalizeAnswerString(fb) !== normCorrect) distractorSet.add(fb);
+      }
+
+      const options = shuffleArray([
+        { text: correctAnswer, isCorrect: true },
+        ...Array.from(distractorSet).slice(0, 3).map(t => ({ text: t, isCorrect: false }))
+      ]);
+
+      const gridEl = document.getElementById('choice4OptionsGrid');
+      const resultPanel = document.getElementById('choice4ResultPanel');
+      resultPanel.classList.add('hidden');
+
+      const labels = ['A', 'B', 'C', 'D'];
+      gridEl.innerHTML = options.map((opt, idx) => `
+        <button type="button" data-idx="${idx}" data-correct="${opt.isCorrect ? '1' : '0'}"
+          class="choice4-opt-btn w-full text-left p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-sm transition flex items-center gap-3 active:scale-[0.99]">
+          <span class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold text-xs flex items-center justify-center shrink-0">${labels[idx]}</span>
+          <span class="choice4-opt-text text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-snug"></span>
+        </button>
+      `).join('');
+
+      gridEl.querySelectorAll('.choice4-opt-btn').forEach((btn, idx) => {
+        const textSpan = btn.querySelector('.choice4-opt-text');
+        renderRichMathContent(textSpan, options[idx].text);
+
+        btn.addEventListener('click', () => {
+          if (studyState.choice4Answered) return;
+          studyState.choice4Answered = true;
+          const isRight = btn.dataset.correct === '1';
+
+          // 全選択肢ボタンをロックし正誤色付け
+          gridEl.querySelectorAll('.choice4-opt-btn').forEach(b => {
+            b.disabled = true;
+            const bCorrect = b.dataset.correct === '1';
+            if (bCorrect) {
+              b.className = 'choice4-opt-btn w-full text-left p-3.5 sm:p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-emerald-500 shadow-sm flex items-center gap-3';
+            } else if (b === btn && !isRight) {
+              b.className = 'choice4-opt-btn w-full text-left p-3.5 sm:p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-500 shadow-sm flex items-center gap-3';
+            } else {
+              b.className = 'choice4-opt-btn w-full text-left p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 opacity-50 flex items-center gap-3';
+            }
+          });
+
+          // 成績記録＆Undoスナップショット保存（キュー進行は「次の問題へ」押下時）
+          recordAnswerStatOnly(card, isRight);
+
+          const resBadge = document.getElementById('choice4ResultBadge');
+          resBadge.className = isRight
+            ? 'px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-200'
+            : 'px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-900/70 dark:text-rose-200';
+          resBadge.innerHTML = isRight
+            ? '<i class="fa-solid fa-circle-check mr-1"></i>正解！'
+            : '<i class="fa-solid fa-circle-xmark mr-1"></i>不正解…';
+
+          document.getElementById('luckyGuessBtnLabel').textContent = card.starred
+            ? '★ピン留め済み'
+            : '勘で正解（★ピン留め）';
+
+          renderRichMathContent(document.getElementById('choice4ExplanationText'), card.back);
+          resultPanel.classList.remove('hidden');
+        });
+      });
+    }
+
+    /**
+     * 形式C：赤文字入力（インライン穴埋めタイピング）描画
+     */
+    function renderTypingFormat(card) {
+      const renderKey = `${card.id}_typing`;
+      if (studyState.currentCardIdRendered === renderKey && studyState.typingAnswered) {
+        return;
+      }
+      studyState.currentCardIdRendered = renderKey;
+      studyState.typingAnswered = false;
+      studyState.typingLastRecord = null;
+
+      const qEl = document.getElementById('typingQuestionText');
+      const clozeEl = document.getElementById('typingClozeArea');
+      const hintBox = document.getElementById('typingHintBox');
+      const hintBtn = document.getElementById('btnTypingHint');
+      const imgWrap = document.getElementById('typingImageWrap');
+      const imgEl = document.getElementById('typingImage');
+
+      renderRichMathContent(qEl, card.front);
+
+      hintBox.classList.add('hidden');
+      if (card.hint && card.hint.trim()) {
+        hintBtn.classList.remove('hidden');
+        renderRichMathContent(hintBox, card.hint);
+      } else {
+        hintBtn.classList.add('hidden');
+      }
+
+      if (card.image) {
+        imgWrap.classList.remove('hidden');
+        imgEl.src = card.image;
+      } else {
+        imgWrap.classList.add('hidden');
+      }
+
+      document.getElementById('typingSubmitRow').classList.remove('hidden');
+      document.getElementById('typingResultPanel').classList.add('hidden');
+
+      // 裏面の【...】部分をすべてインライン入力欄に置換して構築
+      const rawBack = card.back || '';
+      const regex = /【([^】]+)】/g;
+      let lastIndex = 0;
+      let match;
+      let blankIdx = 0;
+      let htmlParts = [];
+
+      while ((match = regex.exec(rawBack)) !== null) {
+        const beforeText = rawBack.slice(lastIndex, match.index);
+        if (beforeText) {
+          htmlParts.push(`<span>${escapeHtml(beforeText)}</span>`);
+        }
+        const targetAns = match[1].trim();
+        htmlParts.push(
+          `<input type="text" data-blank-idx="${blankIdx}" data-target="${escapeHtml(targetAns)}" placeholder="空欄${blankIdx + 1}" autocomplete="off" autocapitalize="off" spellcheck="false" class="typing-blank-input" />`
+        );
+        blankIdx++;
+        lastIndex = regex.lastIndex;
+      }
+
+      const remainingText = rawBack.slice(lastIndex);
+      if (remainingText) {
+        htmlParts.push(`<span>${escapeHtml(remainingText)}</span>`);
+      }
+
+      // 【】が1つもないカードの場合は全体を1つの入力欄にする
+      if (blankIdx === 0) {
+        clozeEl.innerHTML = `<div class="text-center"><input type="text" data-blank-idx="0" data-target="${escapeHtml(rawBack.trim())}" placeholder="答えを入力してください" autocomplete="off" class="typing-blank-input w-full sm:w-80" /></div>`;
+      } else {
+        clozeEl.innerHTML = htmlParts.join('');
+      }
+
+      applyKaTeXToElement(clozeEl);
+
+      const inputs = Array.from(clozeEl.querySelectorAll('.typing-blank-input'));
+      inputs.forEach((inp, idx) => {
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (idx < inputs.length - 1) {
+              inputs[idx + 1].focus();
+            } else {
+              evaluateTypingAnswer(card, false);
+            }
+          }
+        });
+      });
+
+      if (inputs.length > 0) {
+        setTimeout(() => inputs[0].focus(), 60);
+      }
+    }
+
+    function evaluateTypingAnswer(card, isGiveUp = false) {
+      if (studyState.typingAnswered) return;
+      studyState.typingAnswered = true;
+
+      const clozeEl = document.getElementById('typingClozeArea');
+      const inputs = Array.from(clozeEl.querySelectorAll('.typing-blank-input'));
+      let allCorrect = !isGiveUp && inputs.length > 0;
+
+      inputs.forEach(inp => {
+        inp.disabled = true;
+        const userVal = normalizeAnswerString(inp.value);
+        const targetVal = normalizeAnswerString(inp.dataset.target);
+        const isMatch = !isGiveUp && userVal !== '' && userVal === targetVal;
+        if (isMatch) {
+          inp.classList.add('input-correct');
+        } else {
+          inp.classList.add('input-wrong');
+          allCorrect = false;
+        }
+      });
+
+      recordAnswerStatOnly(card, allCorrect);
+      studyState.typingLastRecord = { cardId: card.id, wasCorrect: allCorrect };
+
+      document.getElementById('typingSubmitRow').classList.add('hidden');
+      const resPanel = document.getElementById('typingResultPanel');
+      const resBadge = document.getElementById('typingResultBadge');
+      const overrideBtn = document.getElementById('btnTypingOverrideCorrect');
+
+      if (allCorrect) {
+        resBadge.className = 'px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-200';
+        resBadge.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i>正解！完璧です！';
+        overrideBtn.classList.add('hidden');
+      } else {
+        resBadge.className = 'px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-900/70 dark:text-rose-200';
+        resBadge.innerHTML = isGiveUp
+          ? '<i class="fa-solid fa-eye mr-1"></i>解答表示（復習リストへ登録）'
+          : '<i class="fa-solid fa-circle-xmark mr-1"></i>不一致（下の正解を確認）';
+        overrideBtn.classList.remove('hidden');
+      }
+
+      renderRichMathContent(document.getElementById('typingFullAnswerText'), card.back);
+      resPanel.classList.remove('hidden');
+    }
+
+    /**
+     * 4択・入力形式用：回答確定時にUndoスナップショット保存＆統計更新（キュー進行は「次へ」ボタン時）
+     */
+    function recordAnswerStatOnly(card, isCorrect) {
+      pushStudyUndoSnapshot();
+      card.stats.attempts += 1;
+      card.stats.lastStudied = Date.now();
+      if (isCorrect) {
+        card.stats.correct += 1;
+        card.stats.streak += 1;
+      } else {
+        card.stats.wrong += 1;
+        card.stats.streak = 0;
+      }
+      studyState.pendingJudgedCorrect = isCorrect;
+      saveAppData();
+    }
+
+    function advanceQueueAfterInteractiveAnswer() {
+      const deck = getCurrentDeck();
+      const isCorrect = Boolean(studyState.pendingJudgedCorrect);
+      studyState.currentCardIdRendered = null;
+      studyState.choice4Answered = false;
+      studyState.typingAnswered = false;
+
+      if (studyState.progression === 'block5') {
+        advanceBlockSession(deck, isCorrect);
+      } else {
+        studyState.queueIndex += 1;
+        saveAppData();
+      }
+      renderStudyView();
+    }
+
+    /**
+     * カードめくり形式用：判定実行＆次カードへ即移動
+     */
+    function handleFlipJudge(isCorrect, srsRating = null) {
+      const deck = getCurrentDeck();
+      const card = getActiveCard(deck);
+      if (!card) return;
+
+      pushStudyUndoSnapshot();
+
+      card.stats.attempts += 1;
+      card.stats.lastStudied = Date.now();
+      if (isCorrect) {
+        card.stats.correct += 1;
+        card.stats.streak += 1;
+      } else {
+        card.stats.wrong += 1;
+        card.stats.streak = 0;
+      }
+
+      // 忘却曲線 (SRS) パラメータ更新
+      if (!card.srs) card.srs = { interval: 0, ease: 2.5, due: 0 };
+      const now = Date.now();
+      if (srsRating === 'again' || (!srsRating && !isCorrect)) {
+        card.srs.interval = 0;
+        card.srs.ease = Math.max(1.3, card.srs.ease - 0.2);
+        card.srs.due = now + 60 * 1000; // 1分後
+      } else if (srsRating === 'easy') {
+        card.srs.interval = card.srs.interval === 0 ? 3 : Math.max(2, Math.round(card.srs.interval * card.srs.ease * 1.3));
+        card.srs.ease = Math.min(3.0, card.srs.ease + 0.15);
+        card.srs.due = now + card.srs.interval * 86400000;
+      } else {
+        card.srs.interval = card.srs.interval === 0 ? 1 : Math.max(1, Math.round(card.srs.interval * card.srs.ease));
+        card.srs.due = now + card.srs.interval * 86400000;
+      }
+
+      studyState.isFlipped = false;
+      if (studyState.progression === 'block5') {
+        advanceBlockSession(deck, isCorrect);
+      } else {
+        studyState.queueIndex += 1;
+        saveAppData();
+      }
+      renderStudyView();
+    }
+
+    /**
+     * =========================================================================
+     * 右＝◯・左＝× スワイプジェスチャー（誤操作防止ロジック搭載）
+     * =========================================================================
+     */
+    function setupSwipeGestures() {
+      const wrapper = document.getElementById('swipeCardWrapper');
+      const overlayRight = document.getElementById('swipeOverlayRight');
+      const overlayLeft = document.getElementById('swipeOverlayLeft');
+
+      let startX = 0;
+      let startY = 0;
+      let currentDx = 0;
+      let isTracking = false;
+      let isHorizontalLocked = false;
+      let isVerticalLocked = false;
+
+      const onPointerStart = (clientX, clientY, targetEl) => {
+        if (studyState.format !== 'flip') return;
+        if (targetEl.closest('button') || targetEl.closest('.red-mask')) return;
+        startX = clientX;
+        startY = clientY;
+        currentDx = 0;
+        isTracking = true;
+        isHorizontalLocked = false;
+        isVerticalLocked = false;
+        wrapper.classList.remove('swipe-spring-back');
+      };
+
+      const onPointerMove = (clientX, clientY, e) => {
+        if (!isTracking || isVerticalLocked) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+
+        // 誤操作防止①：横移動が縦スクロールを大きく上回り、かつ24px以上動いたときのみ横スワイプ確定
+        if (!isHorizontalLocked) {
+          if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) {
+            isVerticalLocked = true;
+            return;
+          }
+          if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 24) {
+            isHorizontalLocked = true;
+          } else {
+            return;
+          }
+        }
+
+        if (e && e.cancelable) e.preventDefault();
+        currentDx = dx;
+
+        const width = wrapper.offsetWidth || 340;
+        const threshold = Math.max(120, width * 0.32);
+        const progress = Math.min(1, Math.abs(dx) / threshold);
+        const rotateDeg = Math.max(-14, Math.min(14, dx * 0.045));
+
+        wrapper.style.transform = `translateX(${dx}px) rotate(${rotateDeg}deg)`;
+
+        // 裏面表示中のときだけ◯/×オーバーレイを表示
+        if (studyState.isFlipped) {
+          if (dx > 0) {
+            overlayRight.style.opacity = String(progress);
+            overlayLeft.style.opacity = '0';
+          } else {
+            overlayLeft.style.opacity = String(progress);
+            overlayRight.style.opacity = '0';
+          }
+        }
+      };
+
+      const onPointerEnd = () => {
+        if (!isTracking) return;
+        isTracking = false;
+
+        overlayRight.style.opacity = '0';
+        overlayLeft.style.opacity = '0';
+
+        if (!isHorizontalLocked) {
+          wrapper.style.transform = '';
+          return;
+        }
+
+        const width = wrapper.offsetWidth || 340;
+        // 誤操作防止②：120px以上 または カード幅の32%以上スワイプしないと判定しない
+        const threshold = Math.max(120, width * 0.32);
+
+        if (Math.abs(currentDx) >= threshold) {
+          // 誤操作防止③：表面（未解答）のまま大きくスワイプした場合は判定せずカードを裏返すだけ
+          if (!studyState.isFlipped) {
+            wrapper.classList.add('swipe-spring-back');
+            wrapper.style.transform = 'translateX(0px) rotate(0deg)';
+            studyState.isFlipped = true;
+            document.getElementById('flashcardInner').classList.add('rotate-y-180');
+          } else {
+            const isRight = currentDx > 0;
+            wrapper.classList.add('swipe-spring-back');
+            wrapper.style.transform = `translateX(${isRight ? width * 0.9 : -width * 0.9}px) rotate(${isRight ? 16 : -16}deg)`;
+            setTimeout(() => {
+              wrapper.classList.remove('swipe-spring-back');
+              wrapper.style.transform = '';
+              handleFlipJudge(isRight);
+            }, 190);
+          }
+        } else {
+          // しきい値未満なら中央へスプリングバック
+          wrapper.classList.add('swipe-spring-back');
+          wrapper.style.transform = 'translateX(0px) rotate(0deg)';
+        }
+      };
+
+      // タッチイベント（iPad / スマホ）
+      wrapper.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          onPointerStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
+        }
+      }, { passive: true });
+
+      wrapper.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1) {
+          onPointerMove(e.touches[0].clientX, e.touches[0].clientY, e);
+        }
+      }, { passive: false });
+
+      wrapper.addEventListener('touchend', onPointerEnd);
+      wrapper.addEventListener('touchcancel', onPointerEnd);
+
+      // マウスドラッグイベント（PCブラウザ）
+      wrapper.addEventListener('mousedown', (e) => {
+        if (e.button === 0) {
+          onPointerStart(e.clientX, e.clientY, e.target);
+        }
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (isTracking) onPointerMove(e.clientX, e.clientY, e);
+      });
+      window.addEventListener('mouseup', () => {
+        if (isTracking) onPointerEnd();
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 試験直前「チートシート一覧ビュー」描画
+     * =========================================================================
+     */
+    function renderCramView() {
+      const deck = getCurrentDeck();
+      document.getElementById('cramDeckHeaderTitle').textContent = `${deck.title} — 直前まとめ一覧`;
+
+      const catSelect = document.getElementById('cramCategoryFilter');
+      const currentCat = catSelect.value || 'ALL';
+      const categories = ['ALL', ...new Set(deck.cards.map(c => c.category).filter(Boolean))];
+      catSelect.innerHTML = categories.map(cat => {
+        const label = cat === 'ALL' ? 'すべてのカテゴリ' : cat;
+        return `<option value="${escapeHtml(cat)}" ${cat === currentCat ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+      }).join('');
+
+      const query = document.getElementById('cramSearchInput').value.trim().toLowerCase();
+      const filtered = deck.cards.filter(c => {
+        if (catSelect.value !== 'ALL' && c.category !== catSelect.value) return false;
+        if (!query) return true;
+        return c.front.toLowerCase().includes(query) || c.back.toLowerCase().includes(query);
+      });
+
+      document.getElementById('cramCountBadge').textContent = `${filtered.length}問`;
+      const bodyEl = document.getElementById('cramListBody');
+      bodyEl.classList.toggle('red-sheet-active', studyState.cramRedSheetMode);
+
+      if (filtered.length === 0) {
+        bodyEl.innerHTML = `<p class="p-8 text-center text-xs text-slate-400">該当する問題がありません。</p>`;
+        return;
+      }
+
+      bodyEl.innerHTML = filtered.map((c, idx) => `
+        <div class="cram-row p-3.5 sm:px-5 sm:py-3.5 grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-start hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+          <div class="md:col-span-5 space-y-1">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-[11px] font-mono font-bold text-slate-400">#${idx + 1}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">${escapeHtml(c.category || '一般')}</span>
+              ${c.starred ? '<i class="fa-solid fa-star text-amber-500 text-xs"></i>' : ''}
+            </div>
+            <div class="cram-front text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 whitespace-pre-line" data-raw="${escapeHtml(c.front)}"></div>
+          </div>
+          <div class="md:col-span-7 md:border-l md:border-slate-200/80 md:dark:border-slate-800 md:pl-4">
+            <div class="cram-back text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed" data-raw="${escapeHtml(c.back)}"></div>
+          </div>
+        </div>
+      `).join('');
+
+      bodyEl.querySelectorAll('.cram-front, .cram-back').forEach(el => {
+        renderRichMathContent(el, el.dataset.raw);
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 成績・分析ダッシュボード描画
+     * =========================================================================
+     */
+    function renderStatsView() {
+      const deck = getCurrentDeck();
+      const total = deck.cards.length;
+      const mastered = deck.cards.filter(c => c.stats.streak >= 2).length;
+      const starred = deck.cards.filter(c => c.starred).length;
+      const now = Date.now();
+      const srsDue = deck.cards.filter(c => !c.srs || !c.srs.due || c.srs.due <= now).length;
+
+      let totalAttempts = 0;
+      let totalCorrect = 0;
+      deck.cards.forEach(c => {
+        totalAttempts += c.stats.attempts;
+        totalCorrect += c.stats.correct;
+      });
+      const avgAcc = totalAttempts === 0 ? 0 : Math.round((totalCorrect / totalAttempts) * 100);
+
+      document.getElementById('statTotalCards').textContent = `${total}問`;
+      document.getElementById('statMasteredCards').textContent = `${mastered}問`;
+      document.getElementById('statAvgAccuracy').textContent = `${avgAcc}%`;
+      document.getElementById('statStarredCards').textContent = `${starred}問`;
+      document.getElementById('statSrsDueCards').textContent = `${srsDue}問`;
+
+      const catMap = {};
+      deck.cards.forEach(c => {
+        const cat = c.category || '一般';
+        if (!catMap[cat]) catMap[cat] = { total: 0, attempts: 0, correct: 0 };
+        catMap[cat].total += 1;
+        catMap[cat].attempts += c.stats.attempts;
+        catMap[cat].correct += c.stats.correct;
+      });
+
+      const catListEl = document.getElementById('categoryStatsList');
+      catListEl.innerHTML = Object.entries(catMap).map(([cat, info]) => {
+        const pct = info.attempts === 0 ? 0 : Math.round((info.correct / info.attempts) * 100);
+        return `
+          <div>
+            <div class="flex justify-between text-xs font-bold mb-1">
+              <span>${escapeHtml(cat)} <span class="text-slate-400 font-normal">(${info.total}問)</span></span>
+              <span class="text-indigo-600 dark:text-indigo-400">${info.attempts === 0 ? '未学習' : pct + '%'}</span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-full bg-indigo-500 rounded-full" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('') || `<p class="text-xs text-slate-400">問題がありません。</p>`;
+
+      const sortedCards = [...deck.cards].sort((a, b) => {
+        if (a.starred !== b.starred) return a.starred ? -1 : 1;
+        if (a.stats.wrong > 0 && b.stats.wrong === 0) return -1;
+        if (b.stats.wrong > 0 && a.stats.wrong === 0) return 1;
+        const accA = a.stats.attempts === 0 ? 999 : a.stats.correct / a.stats.attempts;
+        const accB = b.stats.attempts === 0 ? 999 : b.stats.correct / b.stats.attempts;
+        return accA - accB;
+      });
+
+      const rankEl = document.getElementById('weaknessRankingList');
+      rankEl.innerHTML = sortedCards.map((c, idx) => {
+        const hasAttempts = c.stats.attempts > 0;
+        const acc = hasAttempts ? Math.round((c.stats.correct / c.stats.attempts) * 100) : null;
+        const badgeClass = !hasAttempts
+          ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+          : (acc < 75 ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400');
+
+        return `
+          <div class="py-3 flex items-start justify-between gap-3">
+            <div class="flex items-start gap-2.5 min-w-0 flex-1">
+              <button type="button" onclick="toggleCardStarById('${c.id}')" class="mt-0.5 text-base ${c.starred ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'}">
+                <i class="${c.starred ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+              </button>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">${escapeHtml(c.front)}</p>
+                <div class="stat-card-back text-xs text-slate-500 dark:text-slate-400 mt-1" data-raw="${escapeHtml(c.back)}"></div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="inline-block px-2 py-0.5 rounded-md text-xs font-extrabold ${badgeClass}">
+                ${hasAttempts ? `正答率 ${acc}%` : '未学習'}
+              </span>
+              <p class="text-[11px] text-slate-400 mt-0.5">正解 ${c.stats.correct} / 誤答 ${c.stats.wrong}</p>
+            </div>
+          </div>
+        `;
+      }).join('') || `<p class="py-6 text-center text-xs text-slate-400">問題がありません。</p>`;
+
+      rankEl.querySelectorAll('.stat-card-back').forEach(el => renderRichMathContent(el, el.dataset.raw));
+    }
+
+    window.toggleCardStarById = function(cardId) {
+      const deck = getCurrentDeck();
+      const card = deck.cards.find(c => c.id === cardId);
+      if (!card) return;
+      card.starred = !card.starred;
+      saveAppData();
+      renderStatsView();
+    };
+
+    /**
+     * =========================================================================
+     * 管理・直接編集・画像添付・QR共有画面描画
+     * =========================================================================
+     */
+    function updateLivePreview() {
+      const frontRaw = document.getElementById('inputCardFront').value;
+      const backRaw = document.getElementById('inputCardBack').value;
+      const frontPreviewEl = document.getElementById('livePreviewFront');
+      const backPreviewEl = document.getElementById('livePreviewBack');
+
+      if (!frontRaw.trim()) {
+        frontPreviewEl.innerHTML = `<span class="text-slate-400 font-normal text-xs">表面に入力するとここに表示されます</span>`;
+      } else {
+        renderRichMathContent(frontPreviewEl, frontRaw);
+      }
+
+      if (!backRaw.trim()) {
+        backPreviewEl.innerHTML = `<span class="text-slate-400 font-normal text-xs">裏面に入力すると数式と【赤シート】が表示されます</span>`;
+      } else {
+        renderRichMathContent(backPreviewEl, backRaw);
+      }
+    }
+
+    function compressImageFileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 800;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.78));
+          };
+          img.onerror = reject;
+          img.src = ev.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function setEditorImage(dataUrl) {
+      studyState.editorImageDataUrl = dataUrl;
+      const wrap = document.getElementById('editorImagePreviewWrap');
+      const img = document.getElementById('editorImagePreview');
+      const removeBtn = document.getElementById('btnRemoveCardImage');
+      if (dataUrl) {
+        wrap.classList.remove('hidden');
+        img.src = dataUrl;
+        removeBtn.classList.remove('hidden');
+      } else {
+        wrap.classList.add('hidden');
+        img.src = '';
+        removeBtn.classList.add('hidden');
+      }
+    }
+
+    function renderManageView() {
+      const deck = getCurrentDeck();
+      document.getElementById('manageDeckTitle').textContent = deck.title;
+      document.getElementById('manageDeckDesc').textContent = deck.description || '問題の追加・直接編集・画像添付・AIインポート・QR共有が行えます';
+
+      const query = document.getElementById('manageSearchInput').value.trim().toLowerCase();
+      const filtered = deck.cards.filter(c => {
+        if (!query) return true;
+        return (
+          c.front.toLowerCase().includes(query) ||
+          c.back.toLowerCase().includes(query) ||
+          (c.category && c.category.toLowerCase().includes(query))
+        );
+      });
+
+      document.getElementById('manageCardCount').textContent = filtered.length;
+      const listEl = document.getElementById('manageCardList');
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<p class="py-8 text-center text-xs text-slate-400">該当する問題がありません。</p>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map((c, idx) => `
+        <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="space-y-1 flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[11px] font-mono font-bold text-slate-400">#${idx + 1}</span>
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">${escapeHtml(c.category || '一般')}</span>
+              ${c.image ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"><i class="fa-regular fa-image mr-0.5"></i>画像付</span>' : ''}
+              ${c.starred ? '<i class="fa-solid fa-star text-amber-500 text-xs"></i>' : ''}
+            </div>
+            <p class="manage-card-front text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100" data-raw="${escapeHtml(c.front)}"></p>
+            <div class="manage-card-back text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line" data-raw="${escapeHtml(c.back)}"></div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+            <button type="button" onclick="startEditCard('${c.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 text-indigo-600 dark:text-indigo-400 transition">
+              <i class="fa-solid fa-pen"></i> 編集
+            </button>
+            <button type="button" onclick="deleteCard('${c.id}')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-rose-50 text-rose-600 dark:text-rose-400 transition">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      listEl.querySelectorAll('.manage-card-front, .manage-card-back').forEach(el => {
+        renderRichMathContent(el, el.dataset.raw);
+      });
+    }
+
+    window.startEditCard = function(cardId) {
+      const deck = getCurrentDeck();
+      const card = deck.cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      document.getElementById('editCardId').value = card.id;
+      document.getElementById('inputCardFront').value = card.front;
+      document.getElementById('inputCardBack').value = card.back;
+      document.getElementById('inputCardHint').value = card.hint || '';
+      document.getElementById('inputCardCategory').value = card.category || '';
+      setEditorImage(card.image || null);
+
+      document.getElementById('editorFormTitle').innerHTML = `<i class="fa-solid fa-pen-to-square text-amber-500"></i> 問題を直接編集中`;
+      document.getElementById('btnSubmitCard').innerHTML = `<i class="fa-solid fa-check mr-1.5"></i>変更を保存する`;
+      document.getElementById('btnCancelEdit').classList.remove('hidden');
+      updateLivePreview();
+      document.getElementById('cardEditorForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    window.deleteCard = async function(cardId) {
+      const ok = await showCustomDialog({
+        title: '問題の削除',
+        message: 'この問題を削除しますか？（削除後8秒間は元に戻せます）',
+        confirmText: '削除する',
+        confirmDanger: true
+      });
+      if (!ok) return;
+
+      const deck = getCurrentDeck();
+      saveTrashBackupAndNotify('問題を1問削除しました');
+      deck.cards = deck.cards.filter(c => c.id !== cardId);
+      saveAppData();
+      renderDeckSelector();
+      renderManageView();
+    };
+
+    function parseBulkText(rawText) {
+      const trimmed = rawText.trim();
+      if (!trimmed) return [];
+
+      if (trimmed.startsWith('[')) {
+        try {
+          const arr = JSON.parse(trimmed);
+          if (Array.isArray(arr)) {
+            return arr
+              .filter(item => item && (item.front || item.question) && (item.back || item.answer))
+              .map(item => ({
+                front: String(item.front || item.question).trim(),
+                back: String(item.back || item.answer).replace(/\\n/g, '\n').trim(),
+                hint: String(item.hint || '').trim(),
+                category: String(item.category || '一般').trim()
+              }));
+          }
+        } catch (e) {}
+      }
+
+      const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const results = [];
+      for (const line of lines) {
+        if (line.startsWith('```')) continue;
+        const delimiter = line.includes('|') ? '|' : (line.includes('\t') ? '\t' : null);
+        if (!delimiter) continue;
+        const parts = line.split(delimiter).map(p => p.trim());
+        if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
+          results.push({
+            category: parts[0],
+            front: parts[1],
+            back: parts[2].replace(/\\n/g, '\n'),
+            hint: parts[3] || ''
+          });
+        } else if (parts.length === 2 && parts[0] && parts[1]) {
+          results.push({
+            category: '一般',
+            front: parts[0],
+            back: parts[1].replace(/\\n/g, '\n'),
+            hint: ''
+          });
+        }
+      }
+      return results;
+    }
+
+    /**
+     * =========================================================================
+     * サーバー不要 QRコード・URL ミニデッキ共有
+     * =========================================================================
+     */
+    function generateShareUrlForDeck(deck) {
+      const compactPayload = {
+        t: deck.title,
+        d: deck.description || '',
+        c: deck.cards.map(c => [c.category || '一般', c.front, c.back, c.hint || ''])
+      };
+      const jsonStr = JSON.stringify(compactPayload);
+      let encoded = '';
+      if (window.LZString && typeof window.LZString.compressToEncodedURIComponent === 'function') {
+        encoded = 'lz_' + window.LZString.compressToEncodedURIComponent(jsonStr);
+      } else {
+        encoded = 'b64_' + btoa(unescape(encodeURIComponent(jsonStr)));
+      }
+      const baseUrl = window.location.origin + window.location.pathname;
+      return `${baseUrl}#share=${encoded}`;
+    }
+
+    async function checkIncomingSharedDeckOnLoad() {
+      const hash = window.location.hash || '';
+      if (!hash.startsWith('#share=')) return;
+      const payloadStr = hash.slice(7);
+      try {
+        let jsonStr = '';
+        if (payloadStr.startsWith('lz_') && window.LZString) {
+          jsonStr = window.LZString.decompressFromEncodedURIComponent(payloadStr.slice(3));
+        } else if (payloadStr.startsWith('b64_')) {
+          jsonStr = decodeURIComponent(escape(atob(payloadStr.slice(4))));
+        } else if (window.LZString) {
+          jsonStr = window.LZString.decompressFromEncodedURIComponent(payloadStr);
+        }
+
+        if (!jsonStr) return;
+        const parsed = JSON.parse(jsonStr);
+        if (!parsed || !Array.isArray(parsed.c) || parsed.c.length === 0) return;
+
+        // ハッシュをクリーンアップ
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+
+        const ok = await showCustomDialog({
+          title: '共有デッキの受け取り',
+          message: `共有されたデッキ「${parsed.t || '共有デッキ'}」（${parsed.c.length}問）が見つかりました。\nあなたのアプリに取り込みますか？`,
+          confirmText: '取り込む',
+          showCancel: true
+        });
+
+        if (!ok) return;
+
+        const newDeck = {
+          id: generateId('deck'),
+          title: parsed.t || '共有デッキ',
+          description: parsed.d || 'URL/QR共有からインポート',
+          examDate: null,
+          createdAt: Date.now(),
+          cards: parsed.c.map(row => ({
+            id: generateId('card'),
+            category: row[0] || '一般',
+            front: row[1] || '',
+            back: row[2] || '',
+            hint: row[3] || '',
+            image: null,
+            starred: false,
+            stats: { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null },
+            srs: { interval: 0, ease: 2.5, due: 0 }
+          }))
+        };
+
+        appData.decks.push(newDeck);
+        appData.currentDeckId = newDeck.id;
+        saveAppData();
+        renderAllViews();
+        showToast(`「${newDeck.title}」（${newDeck.cards.length}問）を取り込みました！`, 'success');
+      } catch (err) {
+        console.warn('Share import failed:', err);
+      }
+    }
+
+    /**
+     * =========================================================================
+     * イベントリスナー初期化
+     * =========================================================================
+     */
+    function renderDeckSelector() {
+      const selector = document.getElementById('deckSelector');
+      selector.innerHTML = appData.decks.map(d => {
+        const selected = d.id === appData.currentDeckId ? 'selected' : '';
+        return `<option value="${escapeHtml(d.id)}" ${selected}>${escapeHtml(d.title)} (${d.cards.length}問)</option>`;
+      }).join('');
+    }
+
+    function bindEvents() {
+      // テーマ切替
+      document.getElementById('btnToggleTheme').addEventListener('click', () => {
+        appData.theme = appData.theme === 'dark' ? 'light' : 'dark';
+        applyTheme();
+        saveAppData();
+      });
+
+      // デッキ選択
+      document.getElementById('deckSelector').addEventListener('change', (e) => {
+        appData.currentDeckId = e.target.value;
+        studyState.selectedCategory = 'ALL';
+        studyState.srsIgnoreDue = false;
+        saveAppData();
+        buildProgressionQueue(getCurrentDeck());
+        renderAllViews();
+      });
+
+      // ナビゲーションタブ切替
+      document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const target = tab.dataset.tab;
+          document.querySelectorAll('.nav-tab').forEach(t => {
+            const active = t.dataset.tab === target;
+            t.className = active
+              ? 'nav-tab flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 flex items-center justify-center gap-1.5 whitespace-nowrap transition'
+              : 'nav-tab flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center gap-1.5 whitespace-nowrap transition';
+          });
+
+          document.getElementById('tab-study').classList.toggle('hidden', target !== 'study');
+          document.getElementById('tab-cram').classList.toggle('hidden', target !== 'cram');
+          document.getElementById('tab-stats').classList.toggle('hidden', target !== 'stats');
+          document.getElementById('tab-manage').classList.toggle('hidden', target !== 'manage');
+
+          if (target === 'study') renderStudyView();
+          if (target === 'cram') renderCramView();
+          if (target === 'stats') renderStatsView();
+          if (target === 'manage') {
+            renderManageView();
+            updateLivePreview();
+          }
+        });
+      });
+
+      // 進行ルール切替
+      document.querySelectorAll('.prog-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          studyState.progression = btn.dataset.prog;
+          studyState.srsIgnoreDue = false;
+          buildProgressionQueue(getCurrentDeck());
+          renderStudyView();
+        });
+      });
+
+      // 出題形式切替
+      document.querySelectorAll('.format-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          studyState.format = btn.dataset.format;
+          studyState.isFlipped = false;
+          studyState.currentCardIdRendered = null;
+          studyState.choice4Answered = false;
+          studyState.typingAnswered = false;
+          renderStudyView();
+        });
+      });
+
+      // 出題向き切替（通常 / 逆向き）
+      document.getElementById('btnToggleDirection').addEventListener('click', () => {
+        studyState.direction = studyState.direction === 'normal' ? 'reverse' : 'normal';
+        studyState.isFlipped = false;
+        studyState.currentCardIdRendered = null;
+        renderStudyView();
+      });
+
+      // 並び順切替（登録順 / シャッフル）
+      document.getElementById('btnToggleOrder').addEventListener('click', () => {
+        studyState.order = studyState.order === 'seq' ? 'shuffle' : 'seq';
+        const deck = getCurrentDeck();
+        if (studyState.progression === 'block5') {
+          initOrRepairBlockSession(deck, true);
+        } else {
+          buildProgressionQueue(deck);
+        }
+        renderStudyView();
+      });
+
+      // カテゴリフィルタ
+      document.getElementById('studyCategoryFilter').addEventListener('change', (e) => {
+        studyState.selectedCategory = e.target.value;
+        buildProgressionQueue(getCurrentDeck());
+        renderStudyView();
+      });
+
+      // 試験日設定
+      document.getElementById('btnSetExamDate').addEventListener('click', async () => {
+        const deck = getCurrentDeck();
+        const val = await showCustomDialog({
+          title: '試験日の設定（1日ノルマ自動計算）',
+          message: '目標の試験日を選択してください（空欄でOKを押すと解除します）',
+          showInput: true,
+          inputType: 'date',
+          defaultValue: deck.examDate || '',
+          confirmText: '設定する'
+        });
+        if (val === null) return;
+        deck.examDate = val || null;
+        saveAppData();
+        updateExamCountdownBadge(deck);
+      });
+
+      // セッション最初から
+      document.getElementById('btnResetSession').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        if (studyState.progression === 'block5') {
+          initOrRepairBlockSession(deck, true);
+        } else {
+          buildProgressionQueue(deck);
+        }
+        renderStudyView();
+      });
+
+      // 無音 Undo ボタン
+      document.getElementById('btnUndoAnswer').addEventListener('click', handleUndoLastAnswer);
+      document.getElementById('btnCompleteUndoLast').addEventListener('click', handleUndoLastAnswer);
+
+      // 完了画面ボタン群
+      document.getElementById('btnCompleteRestart').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        studyState.srsIgnoreDue = false;
+        if (studyState.progression === 'block5') {
+          initOrRepairBlockSession(deck, true);
+        } else {
+          buildProgressionQueue(deck);
+        }
+        renderStudyView();
+      });
+
+      document.getElementById('btnCompletePracticeAllSrs').addEventListener('click', () => {
+        studyState.srsIgnoreDue = true;
+        buildProgressionQueue(getCurrentDeck());
+        renderStudyView();
+      });
+
+      document.getElementById('btnCompleteGoWeakness').addEventListener('click', () => {
+        studyState.progression = 'weakness';
+        buildProgressionQueue(getCurrentDeck());
+        renderStudyView();
+      });
+
+      // ★ピン留めトグル
+      document.getElementById('btnToggleStar').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        const card = getActiveCard(deck);
+        if (!card) return;
+        card.starred = !card.starred;
+        saveAppData();
+        updateStarButtonUI(card);
+      });
+
+      // 赤シート隠すモード切替
+      document.getElementById('btnToggleRedSheet').addEventListener('click', () => {
+        studyState.redSheetMode = !studyState.redSheetMode;
+        const backContainer = document.getElementById('cardBackContainer');
+        const frontContainer = document.getElementById('cardFrontText');
+        const label = document.getElementById('redSheetLabel');
+        const icon = document.getElementById('redSheetIcon');
+        const btn = document.getElementById('btnToggleRedSheet');
+
+        document.querySelectorAll('.red-mask.peeked').forEach(el => el.classList.remove('peeked'));
+
+        if (studyState.redSheetMode) {
+          backContainer.classList.add('red-sheet-active');
+          frontContainer.classList.add('red-sheet-active');
+          label.textContent = '赤シート: ON';
+          icon.className = 'fa-solid fa-eye';
+          btn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-rose-600 border-rose-600 text-white shadow-sm';
+        } else {
+          backContainer.classList.remove('red-sheet-active');
+          frontContainer.classList.remove('red-sheet-active');
+          label.textContent = '赤シート: OFF';
+          icon.className = 'fa-solid fa-eye-slash';
+          btn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold border-2 transition flex items-center gap-1.5 bg-white dark:bg-slate-900 border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 shadow-sm';
+        }
+      });
+
+      // カードフリップ＆赤シートチラ見
+      document.getElementById('flashcardInner').addEventListener('click', (e) => {
+        if (e.target.closest('#btnShowHint')) return;
+        const maskEl = e.target.closest('.red-mask');
+        if (studyState.redSheetMode && maskEl) {
+          e.stopPropagation();
+          maskEl.classList.toggle('peeked');
+          return;
+        }
+        studyState.isFlipped = !studyState.isFlipped;
+        document.getElementById('flashcardInner').classList.toggle('rotate-y-180', studyState.isFlipped);
+      });
+
+      document.getElementById('btnShowHint').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('cardHintBox').classList.toggle('hidden');
+      });
+
+      // カードめくり下部判定ボタン
+      document.getElementById('btnJudgeWrong').addEventListener('click', () => handleFlipJudge(false));
+      document.getElementById('btnJudgeCorrect').addEventListener('click', () => handleFlipJudge(true));
+
+      document.querySelectorAll('.srs-judge-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const rating = btn.dataset.srs;
+          handleFlipJudge(rating !== 'again', rating);
+        });
+      });
+
+      // 4択モード操作
+      document.getElementById('btnChoice4Hint').addEventListener('click', () => {
+        document.getElementById('choice4HintBox').classList.toggle('hidden');
+      });
+      document.getElementById('btnChoice4LuckyGuess').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        const card = getActiveCard(deck);
+        if (!card) return;
+        card.starred = !card.starred;
+        saveAppData();
+        updateStarButtonUI(card);
+        document.getElementById('luckyGuessBtnLabel').textContent = card.starred
+          ? '★ピン留め済み'
+          : '勘で正解（★ピン留め）';
+      });
+      document.getElementById('btnChoice4Next').addEventListener('click', advanceQueueAfterInteractiveAnswer);
+
+      // 赤文字入力モード操作
+      document.getElementById('btnTypingHint').addEventListener('click', () => {
+        document.getElementById('typingHintBox').classList.toggle('hidden');
+      });
+      document.getElementById('btnTypingSubmit').addEventListener('click', () => {
+        const card = getActiveCard(getCurrentDeck());
+        if (card) evaluateTypingAnswer(card, false);
+      });
+      document.getElementById('btnTypingGiveUp').addEventListener('click', () => {
+        const card = getActiveCard(getCurrentDeck());
+        if (card) evaluateTypingAnswer(card, true);
+      });
+      document.getElementById('btnTypingOverrideCorrect').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        const card = getActiveCard(deck);
+        if (!card || !studyState.typingLastRecord) return;
+        // 誤答を正解へ補正
+        if (!studyState.typingLastRecord.wasCorrect) {
+          card.stats.wrong = Math.max(0, card.stats.wrong - 1);
+          card.stats.correct += 1;
+          card.stats.streak = 1;
+          studyState.typingLastRecord.wasCorrect = true;
+          studyState.pendingJudgedCorrect = true;
+          saveAppData();
+        }
+        const resBadge = document.getElementById('typingResultBadge');
+        resBadge.className = 'px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-200';
+        resBadge.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i>正解扱いに変更しました';
+        document.getElementById('btnTypingOverrideCorrect').classList.add('hidden');
+      });
+      document.getElementById('btnTypingNext').addEventListener('click', advanceQueueAfterInteractiveAnswer);
+
+      // キーボードショートカット
+      document.addEventListener('keydown', (e) => {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (!document.getElementById('customDialog').classList.contains('hidden')) return;
+        if (!document.getElementById('modalBulkImport').classList.contains('hidden')) return;
+        if (!document.getElementById('modalQrShare').classList.contains('hidden')) return;
+        if (document.getElementById('tab-study').classList.contains('hidden')) return;
+
+        if (e.key.toLowerCase() === 'z' || e.key === 'Backspace') {
+          e.preventDefault();
+          handleUndoLastAnswer();
+          return;
+        }
+
+        if (studyState.format === 'flip') {
+          if (e.code === 'Space') {
+            e.preventDefault();
+            studyState.isFlipped = !studyState.isFlipped;
+            document.getElementById('flashcardInner').classList.toggle('rotate-y-180', studyState.isFlipped);
+          } else if (e.key === '1' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            handleFlipJudge(false);
+          } else if (e.key === '2' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            handleFlipJudge(true);
+          } else if (e.key.toLowerCase() === 'h') {
+            document.getElementById('cardHintBox').classList.toggle('hidden');
+          }
+        } else if (studyState.format === 'choice4' && studyState.choice4Answered && (e.code === 'Space' || e.key === 'Enter')) {
+          e.preventDefault();
+          advanceQueueAfterInteractiveAnswer();
+        } else if (studyState.format === 'typing' && studyState.typingAnswered && (e.code === 'Space' || e.key === 'Enter')) {
+          e.preventDefault();
+          advanceQueueAfterInteractiveAnswer();
+        }
+      });
+
+      // 直前一覧シートタブ操作
+      document.getElementById('cramCategoryFilter').addEventListener('change', renderCramView);
+      document.getElementById('cramSearchInput').addEventListener('input', renderCramView);
+      document.getElementById('btnToggleCramRedSheet').addEventListener('click', () => {
+        studyState.cramRedSheetMode = !studyState.cramRedSheetMode;
+        document.getElementById('cramListBody').classList.toggle('red-sheet-active', studyState.cramRedSheetMode);
+        document.getElementById('cramRedSheetLabel').textContent = studyState.cramRedSheetMode
+          ? '一覧赤シート: ON'
+          : '一覧赤シート: OFF';
+      });
+      document.getElementById('btnPrintCramSheet').addEventListener('click', () => window.print());
+
+      // 成績タブ操作
+      document.getElementById('btnStartWeaknessFromStats').addEventListener('click', () => {
+        document.querySelector('.nav-tab[data-tab="study"]').click();
+        studyState.progression = 'weakness';
+        buildProgressionQueue(getCurrentDeck());
+        renderStudyView();
+      });
+
+      document.getElementById('btnResetDeckStats').addEventListener('click', async () => {
+        const ok = await showCustomDialog({
+          title: '学習履歴のリセット',
+          message: 'このデッキの全問題の正答率・SRS記録をリセットしますか？',
+          confirmText: 'リセットする',
+          confirmDanger: true
+        });
+        if (!ok) return;
+        saveTrashBackupAndNotify('学習履歴をリセットしました');
+        const deck = getCurrentDeck();
+        deck.cards.forEach(c => {
+          c.stats = { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null };
+          c.srs = { interval: 0, ease: 2.5, due: 0 };
+        });
+        saveAppData();
+        renderStatsView();
+      });
+
+      // 新規デッキ作成
+      document.getElementById('btnNewDeckModal').addEventListener('click', async () => {
+        const title = await showCustomDialog({
+          title: '新しい学習デッキを作成',
+          message: '科目名やテスト範囲のタイトルを入力してください',
+          showInput: true,
+          confirmText: '作成する'
+        });
+        if (!title) return;
+
+        const newDeck = {
+          id: generateId('deck'),
+          title,
+          description: 'カスタム作成デッキ',
+          examDate: null,
+          createdAt: Date.now(),
+          cards: []
+        };
+        appData.decks.push(newDeck);
+        appData.currentDeckId = newDeck.id;
+        saveAppData();
+        renderAllViews();
+        document.querySelector('.nav-tab[data-tab="manage"]').click();
+        showToast(`「${title}」を作成しました`, 'success');
+      });
+
+      // デッキ名変更・削除
+      document.getElementById('btnRenameDeck').addEventListener('click', async () => {
+        const deck = getCurrentDeck();
+        const newTitle = await showCustomDialog({
+          title: 'デッキ名の変更',
+          message: '新しいデッキ名を入力してください',
+          showInput: true,
+          defaultValue: deck.title,
+          confirmText: '変更する'
+        });
+        if (!newTitle) return;
+        deck.title = newTitle;
+        saveAppData();
+        renderAllViews();
+      });
+
+      document.getElementById('btnDeleteDeck').addEventListener('click', async () => {
+        if (appData.decks.length <= 1) {
+          await showCustomDialog({
+            title: '削除できません',
+            message: '最後の1つのデッキは削除できません。',
+            showCancel: false
+          });
+          return;
+        }
+        const deck = getCurrentDeck();
+        const ok = await showCustomDialog({
+          title: 'デッキの削除',
+          message: `「${deck.title}」（${deck.cards.length}問）を削除しますか？`,
+          confirmText: '削除する',
+          confirmDanger: true
+        });
+        if (!ok) return;
+
+        saveTrashBackupAndNotify(`「${deck.title}」を削除しました`);
+        appData.decks = appData.decks.filter(d => d.id !== deck.id);
+        delete appData.blockSessions[deck.id];
+        appData.currentDeckId = appData.decks[0].id;
+        saveAppData();
+        renderAllViews();
+      });
+
+      // エディタ・プレビュー・クイック挿入
+      const frontInput = document.getElementById('inputCardFront');
+      const backInput = document.getElementById('inputCardBack');
+      frontInput.addEventListener('focus', () => { studyState.lastFocusedTextareaId = 'inputCardFront'; });
+      backInput.addEventListener('focus', () => { studyState.lastFocusedTextareaId = 'inputCardBack'; });
+      frontInput.addEventListener('input', updateLivePreview);
+      backInput.addEventListener('input', updateLivePreview);
+
+      document.querySelectorAll('.insert-snippet-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetEl = document.getElementById(studyState.lastFocusedTextareaId) || backInput;
+          const snippet = btn.dataset.insert;
+          const start = targetEl.selectionStart ?? targetEl.value.length;
+          const end = targetEl.selectionEnd ?? targetEl.value.length;
+          const selectedText = targetEl.value.slice(start, end);
+
+          let inserted = snippet;
+          let cursorOffset = snippet.length;
+          if (snippet === '【】') {
+            inserted = `【${selectedText}】`;
+            cursorOffset = selectedText ? inserted.length : 1;
+          } else if (snippet === '$$') {
+            inserted = `$${selectedText}$`;
+            cursorOffset = selectedText ? inserted.length : 1;
+          } else if (snippet === '$$$$') {
+            inserted = `$$${selectedText}$$`;
+            cursorOffset = selectedText ? inserted.length : 2;
+          } else if (snippet.includes('{}')) {
+            cursorOffset = snippet.indexOf('{') + 1;
+          }
+
+          targetEl.value = targetEl.value.slice(0, start) + inserted + targetEl.value.slice(end);
+          targetEl.focus();
+          targetEl.setSelectionRange(start + cursorOffset, start + cursorOffset);
+          updateLivePreview();
+        });
+      });
+
+      // 画像ファイル選択＆クリップボードペースト添付
+      document.getElementById('inputCardImageFile').addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const compressed = await compressImageFileToDataUrl(file);
+          setEditorImage(compressed);
+          showToast('画像を圧縮して添付しました', 'success');
+        } catch (err) {
+          showToast('画像の読み込みに失敗しました', 'error');
+        } finally {
+          e.target.value = '';
+        }
+      });
+
+      document.getElementById('cardEditorForm').addEventListener('paste', async (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              const compressed = await compressImageFileToDataUrl(file);
+              setEditorImage(compressed);
+              showToast('クリップボードの画像を添付しました', 'success');
+            }
+          }
+        }
+      });
+
+      document.getElementById('btnRemoveCardImage').addEventListener('click', () => setEditorImage(null));
+
+      document.getElementById('btnTogglePreviewRedSheet').addEventListener('click', () => {
+        studyState.previewRedSheetMode = !studyState.previewRedSheetMode;
+        document.getElementById('livePreviewBackWrapper').classList.toggle('red-sheet-active', studyState.previewRedSheetMode);
+        document.getElementById('previewRedSheetLabel').textContent = studyState.previewRedSheetMode
+          ? 'プレビュー赤シート: ON'
+          : 'プレビュー赤シート: OFF';
+      });
+
+      // カード追加・編集フォーム送信
+      document.getElementById('cardEditorForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const deck = getCurrentDeck();
+        const editId = document.getElementById('editCardId').value;
+        const front = frontInput.value.trim();
+        const back = backInput.value.trim();
+        const hint = document.getElementById('inputCardHint').value.trim();
+        const category = document.getElementById('inputCardCategory').value.trim() || '一般';
+
+        if (!front || !back) return;
+
+        if (editId) {
+          const card = deck.cards.find(c => c.id === editId);
+          if (card) {
+            card.front = front;
+            card.back = back;
+            card.hint = hint;
+            card.category = category;
+            card.image = studyState.editorImageDataUrl;
+            showToast('問題を更新しました', 'success');
+          }
+        } else {
+          deck.cards.push({
+            id: generateId('card'),
+            front,
+            back,
+            hint,
+            category,
+            image: studyState.editorImageDataUrl,
+            starred: false,
+            stats: { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null },
+            srs: { interval: 0, ease: 2.5, due: 0 }
+          });
+          showToast('新しい問題を追加しました', 'success');
+        }
+
+        resetEditorForm();
+        saveAppData();
+        renderDeckSelector();
+        renderManageView();
+      });
+
+      document.getElementById('btnCancelEdit').addEventListener('click', resetEditorForm);
+      document.getElementById('manageSearchInput').addEventListener('input', renderManageView);
+
+      // QR・URL共有モーダル
+      const qrModal = document.getElementById('modalQrShare');
+      document.getElementById('btnOpenQrShare').addEventListener('click', () => {
+        const deck = getCurrentDeck();
+        if (deck.cards.length === 0) {
+          showToast('共有する問題がありません', 'warning');
+          return;
+        }
+        const shareUrl = generateShareUrlForDeck(deck);
+        document.getElementById('shareUrlInput').value = shareUrl;
+        const qrBox = document.getElementById('qrCodeCanvasBox');
+        const warnEl = document.getElementById('qrWarningText');
+        qrBox.innerHTML = '';
+        warnEl.classList.add('hidden');
+
+        if (shareUrl.length > 2600) {
+          qrBox.innerHTML = `<p class="text-xs text-slate-500 text-center px-4">問題数が多いためQRコードの上限サイズを超えています。<br>下の「URLコピー」から共有リンクを送ってください。</p>`;
+          warnEl.textContent = `※現在 ${deck.cards.length}問（URL長: ${shareUrl.length}文字）。QRコードは20〜30問程度まで対応しています。`;
+          warnEl.classList.remove('hidden');
+        } else if (window.QRCode) {
+          try {
+            new window.QRCode(qrBox, {
+              text: shareUrl,
+              width: 180,
+              height: 180,
+              colorDark: '#0f172a',
+              colorLight: '#ffffff',
+              correctLevel: window.QRCode.CorrectLevel.L
+            });
+          } catch (e) {
+            qrBox.innerHTML = `<p class="text-xs text-slate-500">下のURLをコピーして共有してください。</p>`;
+          }
+        } else {
+          qrBox.innerHTML = `<p class="text-xs text-slate-500">下のURLをコピーして共有してください。</p>`;
+        }
+
+        qrModal.classList.remove('hidden');
+      });
+
+      document.getElementById('btnCloseQrModal').addEventListener('click', () => qrModal.classList.add('hidden'));
+      document.getElementById('btnCopyShareUrl').addEventListener('click', () => {
+        const input = document.getElementById('shareUrlInput');
+        input.select();
+        try {
+          document.execCommand('copy');
+          showToast('共有URLをコピーしました！', 'success');
+        } catch (e) {
+          showToast('コピーに失敗しました', 'error');
+        }
+      });
+
+      // AI一括インポートモーダル
+      const bulkModal = document.getElementById('modalBulkImport');
+      const bulkTextarea = document.getElementById('bulkImportTextarea');
+      document.getElementById('btnOpenBulkImport').addEventListener('click', () => {
+        bulkTextarea.value = '';
+        document.getElementById('bulkParseCount').textContent = '認識: 0問';
+        document.getElementById('bulkPreviewContainer').classList.add('hidden');
+        bulkModal.classList.remove('hidden');
+      });
+
+      const closeBulk = () => bulkModal.classList.add('hidden');
+      document.getElementById('btnCloseBulkModal').addEventListener('click', closeBulk);
+      document.getElementById('btnCancelBulkModal').addEventListener('click', closeBulk);
+
+      bulkTextarea.addEventListener('input', () => {
+        const parsed = parseBulkText(bulkTextarea.value);
+        document.getElementById('bulkParseCount').textContent = `認識: ${parsed.length}問`;
+        const previewWrap = document.getElementById('bulkPreviewContainer');
+        const previewList = document.getElementById('bulkPreviewList');
+        if (parsed.length === 0) {
+          previewWrap.classList.add('hidden');
+          return;
+        }
+        previewWrap.classList.remove('hidden');
+        previewList.innerHTML = parsed.slice(0, 3).map(item => `
+          <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+            <span class="font-bold text-indigo-600 dark:text-indigo-400">[${escapeHtml(item.category)}]</span>
+            <span class="font-bold">${escapeHtml(item.front)}</span>
+            <div class="bulk-prev-back text-slate-600 dark:text-slate-300 mt-0.5" data-raw="${escapeHtml(item.back)}"></div>
+          </div>
+        `).join('');
+        previewList.querySelectorAll('.bulk-prev-back').forEach(el => renderRichMathContent(el, el.dataset.raw));
+      });
+
+      document.querySelectorAll('input[name="bulkTarget"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          document.getElementById('bulkNewDeckName').classList.toggle('hidden', e.target.value !== 'new');
+        });
+      });
+
+      document.getElementById('btnCopyAiPrompt').addEventListener('click', () => {
+        const promptText = document.getElementById('aiPromptTemplate').textContent;
+        const temp = document.createElement('textarea');
+        temp.value = promptText;
+        document.body.appendChild(temp);
+        temp.select();
+        try {
+          document.execCommand('copy');
+          showToast('AI用指示文をコピーしました！', 'success');
+        } catch (err) {
+          showToast('コピーに失敗しました', 'error');
+        }
+        document.body.removeChild(temp);
+      });
+
+      document.getElementById('btnExecuteBulkImport').addEventListener('click', () => {
+        const parsed = parseBulkText(bulkTextarea.value);
+        if (parsed.length === 0) {
+          showToast('有効な問題データが見つかりません', 'warning');
+          return;
+        }
+        const targetMode = document.querySelector('input[name="bulkTarget"]:checked').value;
+        let targetDeck = getCurrentDeck();
+
+        if (targetMode === 'new') {
+          const newName = document.getElementById('bulkNewDeckName').value.trim() || `新規デッキ (${new Date().toLocaleDateString()})`;
+          targetDeck = {
+            id: generateId('deck'),
+            title: newName,
+            description: '一括インポート作成デッキ',
+            examDate: null,
+            createdAt: Date.now(),
+            cards: []
+          };
+          appData.decks.push(targetDeck);
+          appData.currentDeckId = targetDeck.id;
+        }
+
+        parsed.forEach(item => {
+          targetDeck.cards.push({
+            id: generateId('card'),
+            front: item.front,
+            back: item.back,
+            hint: item.hint,
+            category: item.category,
+            image: null,
+            starred: false,
+            stats: { attempts: 0, correct: 0, wrong: 0, streak: 0, lastStudied: null },
+            srs: { interval: 0, ease: 2.5, due: 0 }
+          });
+        });
+
+        saveAppData();
+        closeBulk();
+        buildProgressionQueue(getCurrentDeck());
+        renderAllViews();
+        showToast(`${parsed.length}問を一括追加しました！`, 'success');
+      });
+
+      // JSON保存・読み込み
+      document.getElementById('btnExportJson').addEventListener('click', () => {
+        const dataStr = JSON.stringify(appData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `studyloop_pro_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('JSONバックアップを保存しました', 'success');
+      });
+
+      document.getElementById('inputImportJson').addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            const imported = JSON.parse(ev.target.result);
+            if (!imported || !Array.isArray(imported.decks)) throw new Error('Invalid JSON');
+
+            const ok = await showCustomDialog({
+              title: 'JSONデータの読み込み',
+              message: '既存のデッキや学習記録を残したまま、新しい問題・デッキを統合（追加）しますか？',
+              confirmText: '統合して追加',
+              showCancel: true
+            });
+            if (!ok) return;
+
+            let addedDecks = 0;
+            let mergedCards = 0;
+            imported.decks.forEach(impDeck => {
+              const norm = normalizeDeckObject(impDeck);
+              const existingDeck = appData.decks.find(d => d.id === norm.id || d.title === norm.title);
+              if (existingDeck) {
+                const existingFronts = new Set(existingDeck.cards.map(c => c.front));
+                norm.cards.forEach(c => {
+                  if (!existingFronts.has(c.front)) {
+                    existingDeck.cards.push(c);
+                    mergedCards++;
+                  }
+                });
+              } else {
+                appData.decks.push(norm);
+                addedDecks++;
+              }
+            });
+
+            saveAppData();
+            buildProgressionQueue(getCurrentDeck());
+            renderAllViews();
+            showToast(`読み込み完了（新規デッキ: ${addedDecks} / 追加問題: ${mergedCards}問）`, 'success');
+          } catch (err) {
+            showToast('JSONファイルの形式が正しくありません', 'error');
+          } finally {
+            e.target.value = '';
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    function resetEditorForm() {
+      document.getElementById('editCardId').value = '';
+      document.getElementById('inputCardFront').value = '';
+      document.getElementById('inputCardBack').value = '';
+      document.getElementById('inputCardHint').value = '';
+      document.getElementById('inputCardCategory').value = '';
+      setEditorImage(null);
+      document.getElementById('editorFormTitle').innerHTML = `<i class="fa-solid fa-circle-plus text-indigo-500"></i> 新しい問題を追加する`;
+      document.getElementById('btnSubmitCard').innerHTML = `<i class="fa-solid fa-plus mr-1.5"></i>問題をデッキに追加`;
+      document.getElementById('btnCancelEdit').classList.add('hidden');
+      updateLivePreview();
+    }
+
+    function renderAllViews() {
+      renderDeckSelector();
+      renderStudyView();
+      renderCramView();
+      renderStatsView();
+      renderManageView();
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      loadAppData();
+      loadUndoStack();
+      applyTheme();
+      bindEvents();
+      setupSwipeGestures();
+      buildProgressionQueue(getCurrentDeck());
+      renderAllViews();
+      await checkIncomingSharedDeckOnLoad();
+    });
+  </script>
+</body>
+</html>
